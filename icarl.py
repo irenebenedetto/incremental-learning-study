@@ -46,7 +46,7 @@ class iCaRL():
     gc.collect()
 
   def get_params(self):
-	params_to_return = {
+      params_to_return = {
 		'MOMENTUM': self.MOMENTUM,
 		'LR': self.LR,
 		'BATCH_SIZE': self.BATCH_SIZE,
@@ -56,7 +56,7 @@ class iCaRL():
 		'NUM_EPOCHS': self.NUM_EPOCHS,
 		'DEVICE': self.DEVICE
 	}
-	return params_to_return
+    return params_to_return
 
   def set_params(self, params):
     self.MOMENTUM = params['MOMENTUM']
