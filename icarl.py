@@ -42,7 +42,7 @@ class iCaRL():
     self.feature_map.fc = nn.Sequential()
     self.feature_map = self.feature_map.to(self.DEVICE)
     self.first_run = True
-    
+
     gc.collect()
 
   def get_params(self):
@@ -96,7 +96,7 @@ class iCaRL():
     # NCM -----
     list_means = torch.stack(list(class_means.values()))
     list_labels = list(class_means.keys())
-    
+
     # Take label that produces minium distance between mean and transformed x. Grouping the distances into a tensor
     labels = []
     for mapped_img in cuda_fm(X):
@@ -114,7 +114,7 @@ class iCaRL():
     gc.collect()
     return torch.stack(labels).type(torch.long).to(self.DEVICE)
 
-    
+
   def incremental_train(self, train_dataloader,test_dataloader, K):
     gc.collect()
     labels = []
@@ -165,7 +165,7 @@ class iCaRL():
   def split_classes(self, X, labels):
     """
     Split classes X into list of lists accordig to labels.
-    
+
     Parameters:
       X: images to split (tensor of tensors)
       labels: corresponding labels, in order
@@ -183,14 +183,14 @@ class iCaRL():
       bool_idx = (labels.numpy() == label.item())
       idx = np.argwhere(bool_idx).flatten()
       split_X[label] = X[idx]
-    
+
     return split_X
 
   def update_representation(self, X, labels):
     """
-    The function update the parameters of the network computing the class loss and the 
-    distillation loss 
-      
+    The function update the parameters of the network computing the class loss and the
+    distillation loss
+
     Params:
       X: training images of new classes s, ..., t
       labels: the damn associated labels
@@ -200,11 +200,6 @@ class iCaRL():
 
     """
     from random import shuffle
-    if self.first_run:
-        num_new_classes = self.train_first_run(X, labels)
-        gc.collect()
-        return num_new_classes
-    cuda_net = self.net.to(self.DEVICE)
 
     if self.mean_on_all_data:
       # Construct mean of class using ALL data available
@@ -212,6 +207,13 @@ class iCaRL():
       print('Computing class mean over the full training set...')
       for label, grouped_X in split_X.items():
         class_mean[label] = compute_class_mean(grouped_X)
+
+    if self.first_run:
+        num_new_classes = self.train_first_run(X, labels)
+        gc.collect()
+        return num_new_classes
+    cuda_net = self.net.to(self.DEVICE)
+
 
     # Io dico che D serve (that's to say: construction of D)
     num_new_classes = torch.unique(labels).size(0)
@@ -253,7 +255,7 @@ class iCaRL():
     # Initalize optimizer, stepsizer, coser varier
     # We actually have to optimize everything this time
     params_to_optimize = cuda_net.parameters()
-    optimizer = optim.SGD(params_to_optimize, lr=self.LR,  momentum=self.MOMENTUM, weight_decay=self.WEIGHT_DECAY)  
+    optimizer = optim.SGD(params_to_optimize, lr=self.LR,  momentum=self.MOMENTUM, weight_decay=self.WEIGHT_DECAY)
     # Clf loss and distillation loss are the same criterion with different inputs
     dist_criterion = nn.BCELoss()
     class_criterion = nn.BCEWithLogitsLoss()
@@ -278,15 +280,15 @@ class iCaRL():
         outputs = cuda_net(images, norm_features=False)
         labels_one_hot = nn.functional.one_hot(labels, num_old_classes + num_new_classes).type_as(outputs)
         g = torch.sigmoid(outputs)
-        
+
         dist_loss = dist_criterion(g[:, :num_old_classes], q) #/ num_old_classes
         class_loss = class_criterion(outputs[:, num_old_classes:], labels_one_hot[:, num_old_classes:])
-        
+
         mean_clf_loss += class_loss.item()
         mean_dist_loss += dist_loss.item()
-      
+
         loss = dist_loss + class_loss
-        loss.backward() 
+        loss.backward()
         optimizer.step()
         #q = q.to('cpu')
         del images
@@ -294,7 +296,7 @@ class iCaRL():
         del outputs
         torch.cuda.empty_cache()
         # --- end batch
-      
+
       mean_clf_loss = mean_clf_loss/len(X_y_q_loader)
       mean_dist_loss = mean_dist_loss/len(X_y_q_loader)
       print(f"Mean classification loss per batch: {mean_clf_loss:.4}")
@@ -314,11 +316,11 @@ class iCaRL():
   def train_first_run(self, X, labels):
     """
     The function performs the training on the first step of training
-      
+
     Params:
       X: tensor of images
     Return:
-      the netwotk with the weight updated 
+      the netwotk with the weight updated
 
     """
     # Again work on a cuda copy and save it to cpu afterwards, yo!
@@ -327,7 +329,7 @@ class iCaRL():
     num_new_classes = torch.unique(labels).size(0) # always 10 but panino is insistent ...
 
     params_to_optimize = cuda_net.parameters()
-    optimizer = optim.SGD(params_to_optimize, lr=self.LR,  momentum=self.MOMENTUM, weight_decay=self.WEIGHT_DECAY)  
+    optimizer = optim.SGD(params_to_optimize, lr=self.LR,  momentum=self.MOMENTUM, weight_decay=self.WEIGHT_DECAY)
     criterion = nn.BCEWithLogitsLoss()
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.MILESTONE, gamma=self.GAMMA)
 
@@ -345,7 +347,7 @@ class iCaRL():
         optimizer.zero_grad()
         images = images.to(self.DEVICE)
         outputs = cuda_net(images, norm_features=False)
-        
+
         labels_one_hot = nn.functional.one_hot(labels, num_new_classes).type_as(outputs).to(self.DEVICE)
         loss = criterion(outputs, labels_one_hot)
         mean_loss += loss.item()
@@ -364,7 +366,7 @@ class iCaRL():
 
     self.first_run = False
 
-    self.net = cuda_net 
+    self.net = cuda_net
     del cuda_net
     torch.cuda.empty_cache()
     self.feature_map = deepcopy(self.net)
@@ -376,12 +378,12 @@ class iCaRL():
 
   def reduce_exemplar_set(self, m):
     """
-    The function reduces the number of images for each exampler set at m 
-      
+    The function reduces the number of images for each exampler set at m
+
     Params:
       m: number of elements that has to be collected
     Return:
-      the list of exemplar_sets updated 
+      the list of exemplar_sets updated
 
     """
     for i, exemplar_set in self.exemplar_sets.items():
@@ -435,9 +437,9 @@ class iCaRL():
       sum_mapped_exemplars.data = sum_mapped_exemplars.data / sum_mapped_exemplars.norm()
       X = torch.cat((X[:min_index], X[min_index+1:]), dim = 0)
       mapped_X = torch.cat((mapped_X[:min_index], mapped_X[min_index+1:]), dim = 0)
-      
+
     new_exemplar_set = torch.stack(new_exemplar_set)
-    
+
     del X
     del mapped_X
     del sum_mapped_exemplars
@@ -445,7 +447,7 @@ class iCaRL():
 
     self.exemplar_sets[label] = new_exemplar_set
     return
-  
+
 
   def test(self, test_dataloader):
     self.net.train(False)
@@ -457,22 +459,20 @@ class iCaRL():
       # print(f"Test labels: {np.unique(labels.numpy())}")
       images = images.to(self.DEVICE)
       labels = labels.to(self.DEVICE)
-      
+
       # Forward Pass
       outputs = self.net(images)
       # Get predictions
       preds_classify = self.classify(images)
       _, preds_fc = torch.max(outputs.data, 1)
-    
+
       # Update Corrects
       running_corrects_classify += torch.sum(preds_classify == labels.data).data.item()
       running_corrects_fc += torch.sum(preds_fc == labels.data).data.item()
-    
+
     # Calculate Accuracy and mean loss
     accuracy_classify = running_corrects_classify / len(test_dataloader.dataset)
     accuracy_fc = running_corrects_fc / len(test_dataloader.dataset)
 
     print(f'\033[94mAccuracy on test set classify :{accuracy_classify}\x1b[0m')
     print(f'\033[94mAccuracy on test set fc :{accuracy_fc}\x1b[0m')
-    
-
