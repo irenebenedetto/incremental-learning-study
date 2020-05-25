@@ -37,8 +37,9 @@ class iCaRL():
     self.mean_on_all_data = mean_on_all_data
     self.class_means = dict()
     # Removing last FC layer and leaving only convolutional feature mapping
-    self.net = net.to(self.DEVICE)
+    self.net = net
     self.feature_map = deepcopy(self.net)
+    self.net = net.to(self.DEVICE)
     self.feature_map.fc = nn.Sequential()
     self.feature_map = self.feature_map.to(self.DEVICE)
     self.first_run = True
@@ -168,6 +169,7 @@ class iCaRL():
 
     mapped_X = torch.cat(mapped_X)
     class_mean = mapped_X.mean(dim = 0)
+    del cuda_fm
     return class_mean
 
   def split_classes(self, X, labels):
