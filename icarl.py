@@ -23,7 +23,7 @@ class iCaRL():
   Implements iCaRL as decribed in *insert paper*
   We attempt to use all tensors instead of lists
   """
-  def __init__(self, net):
+  def __init__(self, net, mean_on_all_data=True):
     self.exemplar_sets = dict()
     # Inizializing with parameters from paper ** insert reference **
     self.MOMENTUM = 0.9
@@ -34,12 +34,15 @@ class iCaRL():
     self.GAMMA = 0.2
     self.NUM_EPOCHS = 70 # CHANGE
     self.DEVICE = 'cuda'
+    self.mean_on_all_data = mean_on_all_data
+    self.class_means = dict()
     # Removing last FC layer and leaving only convolutional feature mapping
     self.net = net.to(self.DEVICE)
     self.feature_map = deepcopy(self.net)
     self.feature_map.fc = nn.Sequential()
     self.feature_map = self.feature_map.to(self.DEVICE)
     self.first_run = True
+    
     gc.collect()
 
 
@@ -68,34 +71,30 @@ class iCaRL():
     cuda_fm = self.feature_map.to(self.DEVICE)
     cuda_fm.train(False)
     class_means = []
-    for exemplar_set in self.exemplar_sets.values():
-      cuda_exemplar_set = exemplar_set
-      list_mapped_exemplar = []
-      # giving 1 exemplar each time to avoid CUDA OUT OF MEMORY 
-      for exemplar in exemplar_set:
-        mapped_exemplar = cuda_fm(exemplar.unsqueeze(0).to(self.DEVICE))
-        mapped_exemplar = mapped_exemplar.to('cpu')
-        list_mapped_exemplar.append(mapped_exemplar)
-      mapped_exemplars = torch.cat(list_mapped_exemplar)
-      class_mean = torch.sum(mapped_exemplars, 0)/len(mapped_exemplars)
-      # Accumulate class means as list of tensors. Mean is normalized as required by paper
-      class_mean.data = class_mean.data / class_mean.data.norm()
-      class_means.append(class_mean)
-      # Free memory
-      del list_mapped_exemplar
-      del cuda_exemplar_set
-      torch.cuda.empty_cache()
-    # Stack them in a tensor of an additional dimension
-    class_means = torch.stack(class_means)
-    # Take label that produces minium distance between mean and transformed x
-    # Grouping the distances into a tensor
+
+    if self.mean_on_all_data:
+      class_means = self.class_means
+    else:
+      class_means = dict()
+      for label, exemplar_set in enumerate(self.exemplar_sets.values()):
+        class_mean = self.compute_class_mean(exemplar_set)
+        class_mean.data = class_mean.data / class_mean.data.norm()
+        class_means[label] = class_mean
+
+    # NCM -----
+    list_means = torch.stack(list(class_means.values()))
+    list_labels = list(class_means.keys())
+    
+    # Take label that produces minium distance between mean and transformed x. Grouping the distances into a tensor
     labels = []
     for mapped_img in cuda_fm(X):
+
       # Broadcast mapped img and take norm on dimension 1 (dimension 0 is the "rows")
       mapped_img.data = mapped_img.data/mapped_img.data.norm()
       mapped_img = mapped_img.to('cpu')
-      distances = torch.norm(mapped_img - class_means, dim=1)
-      y = torch.argmin(distances)
+      distances = torch.norm(mapped_img - list_means, dim=1)
+      argmin = torch.argmin(distances).item()
+      y = list_labels[argmin]
       labels.append(y)
     # Return the labels as LongTensor; clean fm from cuda
     del cuda_fm
@@ -117,7 +116,7 @@ class iCaRL():
     new_classes = torch.unique(labels)
     print(f'Arriving new classes {new_classes}')
 
-    t = self.update_representation(X = X, labels = labels, train_dataloader = train_dataloader)
+    t = self.update_representation(X = X, labels = labels)
     m = int(K/t)
 
     self.reduce_exemplar_set(m=m)
@@ -135,7 +134,47 @@ class iCaRL():
 
     self.test(test_dataloader)
 
-  def update_representation(self, X, labels,  train_dataloader):
+
+  def compute_class_mean(self, X):
+    """
+    Params:
+      X: images of a single class label (tensor of tensors)
+
+    Returns:
+      Mean of elements of X after having been mapped into feature space
+    """
+    cuda_fm = self.feature_map.to(self.DEVICE)
+    # Computing mapped X list
+    mapped_X = [cuda_fm(x.unsqueeze(0).to(self.DEVICE)).to('cpu') for x in X]
+    mapped_X = torch.cat(mapped_X)
+    class_mean = mapped_X.mean(dim = 0)
+    return class_mean
+
+  def split_classes(self, X, labels):
+    """
+    Split classes X into list of lists accordig to labels.
+    
+    Parameters:
+      X: images to split (tensor of tensors)
+      labels: corresponding labels, in order
+
+    Returns:
+      Dictionary containing:
+        - label as key
+        - Tensor of images of the corresponding label as value
+    """
+    unique_labels = torch.unique(labels)
+
+    split_X = dict()
+
+    for label in unique_labels:
+      bool_idx = (labels.numpy() == label.item())
+      idx = np.argwhere(bool_idx).flatten()
+      split_X[label] = X[idx]
+    
+    return split_X
+
+  def update_representation(self, X, labels):
     """
     The function update the parameters of the network computing the class loss and the 
     distillation loss 
@@ -145,16 +184,24 @@ class iCaRL():
       labels: the damn associated labels
 
     Return:
-      La bici di Bibbona    
+      La bici di Bibbona
 
     """
     from random import shuffle
     if self.first_run:
-        num_new_classes = self.train_first_run(X, labels,  train_dataloader)
+        num_new_classes = self.train_first_run(X, labels)
         gc.collect()
         return num_new_classes
     cuda_net = self.net.to(self.DEVICE)
-    # Io dico che D serve
+
+    if self.mean_on_all_data:
+      # Construct mean of class using ALL data available
+      split_X = self.split_classes(X, labels)
+      print('Computing class mean over the full training set...')
+      for label, grouped_X in split_X.items():
+        class_mean[label] = compute_class_mean(grouped_X)
+
+    # Io dico che D serve (that's to say: construction of D)
     num_new_classes = torch.unique(labels).size(0)
     # Store in one single tensor all list of tensors of exemplars... wait what?
     # I mean, store in a single "tensor list" all exemplars. We don't care about the labels for now
@@ -252,7 +299,7 @@ class iCaRL():
     return num_old_classes + num_new_classes
 
 
-  def train_first_run(self, X, labels,  train_dataloader):
+  def train_first_run(self, X, labels):
     """
     The function performs the training on the first step of training
       
@@ -272,6 +319,11 @@ class iCaRL():
     criterion = nn.BCEWithLogitsLoss()
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.MILESTONE, gamma=self.GAMMA)
 
+    # Defining a new dataloader from given data
+    train_dataset = [(img, lb) for img, lb in zip(X, labels)]
+    # alternative
+    # train_dataset = TensorDataset(X, labels)
+    train_dataloader = DataLoader(train_dataset, batch_size=self.BATCH_SIZE, shuffle=False, num_workers=4, drop_last=False)
     print(f'First run, new classes {num_new_classes}')
     for epoch in range(self.NUM_EPOCHS):
       print(f"Starting epoch {epoch +1}/{self.NUM_EPOCHS}")
@@ -377,6 +429,8 @@ class iCaRL():
     del X
     del mapped_X
     del sum_mapped_exemplars
+    # Append newly constructed set to list of examplar sets
+
     self.exemplar_sets[label] = new_exemplar_set
     return
   
