@@ -45,6 +45,18 @@ class iCaRL():
     
     gc.collect()
 
+  def get_params(self):
+	params_to_return = {
+		'MOMENTUM': self.MOMENTUM,
+		'LR': self.LR,
+		'BATCH_SIZE': self.BATCH_SIZE,
+		'MILESTONE': self.MILESTONE,
+		'WEIGHT_DECAY': self.WEIGHT_DECAY,
+		'GAMMA': self.GAMMA,
+		'NUM_EPOCHS': self.NUM_EPOCHS,
+		'DEVICE': self.DEVICE
+	}
+	return params_to_return
 
   def set_params(self, params):
     self.MOMENTUM = params['MOMENTUM']
@@ -443,8 +455,8 @@ class iCaRL():
     tot_loss = 0
     for images, labels in test_dataloader:
       # print(f"Test labels: {np.unique(labels.numpy())}")
-      images = images.to(DEVICE)
-      labels = labels.to(DEVICE)
+      images = images.to(self.DEVICE)
+      labels = labels.to(self.DEVICE)
       
       # Forward Pass
       outputs = self.net(images)
