@@ -39,9 +39,7 @@ class iCaRL():
     # Removing last FC layer and leaving only convolutional feature mapping
     self.net = net
     self.feature_map = deepcopy(self.net)
-    self.net = net.to(self.DEVICE)
     self.feature_map.fc = nn.Sequential()
-    self.feature_map = self.feature_map.to(self.DEVICE)
     self.first_run = True
 
     gc.collect()
@@ -156,18 +154,21 @@ class iCaRL():
     Returns:
       Mean of elements of X after having been mapped into feature space
     """
-    cuda_fm = self.feature_map.to(self.DEVICE)
+    cuda_fm = self.feature_map
+    cuda_fm = cuda_fm.to(self.DEVICE)
     # Computing mapped X list (using explicit for because of CUDA :/)
+
     mapped_X = []
-    for x in X:
-        cuda_x = x.unsqueeze(0).to(self.DEVICE)
-        cuda_mapped_x = cuda_fm(cuda_x)
-        mapped_x = cuda_mapped_x.to('cpu')
-        del cuda_mapped_x
-        mapped_X.append(mapped_x)
-        del cuda_x
-        
-        torch.cuda.empty_cache()
+    with torch.no_grad():
+      for x in X:
+          cuda_x = x.unsqueeze(0).to(self.DEVICE)
+          cuda_mapped_x = cuda_fm(cuda_x)
+          mapped_x = cuda_mapped_x.to('cpu')
+          del cuda_mapped_x
+          mapped_X.append(mapped_x)
+          del cuda_x
+          
+          torch.cuda.empty_cache()
 
     mapped_X = torch.cat(mapped_X)
     class_mean = mapped_X.mean(dim = 0)
@@ -336,8 +337,8 @@ class iCaRL():
 
     """
     # Again work on a cuda copy and save it to cpu afterwards, yo!
-    cuda_net = self.net.to(self.DEVICE)
-
+    cuda_net = self.net
+    cuda_net = cuda_net.to(self.DEVICE)
     num_new_classes = torch.unique(labels).size(0) # always 10 but panino is insistent ...
 
     params_to_optimize = cuda_net.parameters()
@@ -354,6 +355,7 @@ class iCaRL():
     for epoch in range(self.NUM_EPOCHS):
       print(f"Starting epoch {epoch +1}/{self.NUM_EPOCHS}")
       mean_loss = 0
+
       for images, labels in train_dataloader:
         cuda_net.train(True)
         optimizer.zero_grad()
@@ -378,7 +380,7 @@ class iCaRL():
 
     self.first_run = False
 
-    self.net = cuda_net
+    self.net = cuda_net.to('cpu')
     del cuda_net
     torch.cuda.empty_cache()
     self.feature_map = deepcopy(self.net)
@@ -416,15 +418,19 @@ class iCaRL():
 
     """
     mapped_x_list = []
+    cuda_fm = self.feature_map
+    cuda_fm = cuda_fm.to(self.DEVICE)
     # Taking the first label is ok, they are all the same
     # It is CRUCIAL not to shuffle here! (we needed dataloader to save cuda memory)
     for x in X:
       x = torch.unsqueeze(x, 0).to(self.DEVICE)
-      mapped_x = self.feature_map(x).to('cpu')
+      cuda_mapped_x = cuda_fm(x)
+      mapped_x = cuda_mapped_x.to('cpu')
+      del cuda_mapped_x
       mapped_x_list.append(mapped_x)
       del x
-      del mapped_x
       torch.cuda.empty_cache()
+
     # Instantiating tensor of mapped images and normal images
     mapped_X = torch.cat(mapped_x_list) # mapped_X is a list of images in tensor form
     #del cuda_feature_map
@@ -455,37 +461,55 @@ class iCaRL():
     del X
     del mapped_X
     del sum_mapped_exemplars
+    del cuda_fm
     # Append newly constructed set to list of examplar sets
 
     self.exemplar_sets[label] = new_exemplar_set
     return
 
 
-  def test(self, test_dataloader):
-    self.net.train(False)
+  def test(self, test_dataloader, ncm=True):
+    with torch.no_grad():
+      if ncm:
+        print('Testing with NMC')
+        running_correct = 0
+        for images, labels in test_dataloader:
+          # print(f"Test labels: {np.unique(labels.numpy())}")
+          images = images.to(self.DEVICE)
+          labels = labels.to(self.DEVICE)
+          preds = self.classify(images)
 
-    running_corrects_classify = 0
-    running_corrects_fc = 0
-    tot_loss = 0
-    for images, labels in test_dataloader:
-      # print(f"Test labels: {np.unique(labels.numpy())}")
-      images = images.to(self.DEVICE)
-      labels = labels.to(self.DEVICE)
+          # Update Corrects
+          running_correct += torch.sum(preds == labels.data).data.item()
+        # Calculate Accuracy and mean loss
+        accuracy = running_correct / len(test_dataloader.dataset)
+        print(f'\033[94mAccuracy on test set :{accuracy}\x1b[0m')
 
-      # Forward Pass
-      outputs = self.net(images)
-      # Get predictions
-      preds_classify = self.classify(images)
-      _, preds_fc = torch.max(outputs.data, 1)
+      else:
+        print('Testing with fc')
+        self.net.train(False)
+        cuda_net = self.net
+        cuda_net = cuda_net.to(self.DEVICE)
+        running_correct = 0
 
-      # Update Corrects
-      running_corrects_classify += torch.sum(preds_classify == labels.data).data.item()
-      running_corrects_fc += torch.sum(preds_fc == labels.data).data.item()
+        for images, labels in test_dataloader:
+          # print(f"Test labels: {np.unique(labels.numpy())}")
+          images = images.to(self.DEVICE)
+          labels = labels.to(self.DEVICE)
+          # Forward Pass
+          outputs = cuda_net(images)
+          _, preds = torch.max(outputs.data, 1)
+          # Update Corrects
+          running_correct += torch.sum(preds == labels.data).data.item()
 
-    # Calculate Accuracy and mean loss
-    accuracy_classify = running_corrects_classify / len(test_dataloader.dataset)
-    accuracy_fc = running_corrects_fc / len(test_dataloader.dataset)
+        del cuda_net
+        # Calculate Accuracy and mean loss
+        accuracy = running_correct / len(test_dataloader.dataset)
+        print(f'\033[94mAccuracy on test set :{accuracy}\x1b[0m')
 
 
-    print(f'\033[94mAccuracy on test set classify :{accuracy_classify}\x1b[0m')
-    print(f'\033[94mAccuracy on test set fc :{accuracy_fc}\x1b[0m')
+      
+
+    
+
+    
