@@ -46,16 +46,16 @@ class iCaRL():
     gc.collect()
 
   def get_params(self):
-      params_to_return = {
-		'MOMENTUM': self.MOMENTUM,
-		'LR': self.LR,
-		'BATCH_SIZE': self.BATCH_SIZE,
-		'MILESTONE': self.MILESTONE,
-		'WEIGHT_DECAY': self.WEIGHT_DECAY,
-		'GAMMA': self.GAMMA,
-		'NUM_EPOCHS': self.NUM_EPOCHS,
-		'DEVICE': self.DEVICE
-	}
+    params_to_return = {
+      'MOMENTUM': self.MOMENTUM,
+      'LR': self.LR,
+      'BATCH_SIZE': self.BATCH_SIZE,
+      'MILESTONE': self.MILESTONE,
+      'WEIGHT_DECAY': self.WEIGHT_DECAY,
+      'GAMMA': self.GAMMA,
+      'NUM_EPOCHS': self.NUM_EPOCHS,
+      'DEVICE': self.DEVICE
+    }
     return params_to_return
 
   def set_params(self, params):
@@ -473,6 +473,7 @@ class iCaRL():
     # Calculate Accuracy and mean loss
     accuracy_classify = running_corrects_classify / len(test_dataloader.dataset)
     accuracy_fc = running_corrects_fc / len(test_dataloader.dataset)
+
 
     print(f'\033[94mAccuracy on test set classify :{accuracy_classify}\x1b[0m')
     print(f'\033[94mAccuracy on test set fc :{accuracy_fc}\x1b[0m')
