@@ -144,6 +144,7 @@ class iCaRL():
       del idx
 
     self.test(test_dataloader)
+    self.test(test_dataloader, ncm=False)
 
 
   def compute_class_mean(self, X):
