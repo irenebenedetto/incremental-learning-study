@@ -206,7 +206,7 @@ class iCaRL():
       split_X = self.split_classes(X, labels)
       print('Computing class mean over the full training set...')
       for label, grouped_X in split_X.items():
-        class_mean[label] = self.compute_class_mean(grouped_X)
+        self.class_mean[label] = self.compute_class_mean(grouped_X)
 
     if self.first_run:
         num_new_classes = self.train_first_run(X, labels)
