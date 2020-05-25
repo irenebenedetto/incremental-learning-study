@@ -161,10 +161,12 @@ class iCaRL():
     mapped_X = []
     for x in X:
         cuda_x = x.unsqueeze(0).to(self.DEVICE)
-        mapped_x = cuda_fm(cuda_x).to('cpu')
+        cuda_mapped_x = cuda_fm(cuda_x)
+        mapped_x = cuda_mapped_x.to('cpu')
+        del cuda_mapped_x
         mapped_X.append(mapped_x)
         del cuda_x
-        del mapped_x
+        
         torch.cuda.empty_cache()
 
     mapped_X = torch.cat(mapped_X)
