@@ -156,8 +156,16 @@ class iCaRL():
       Mean of elements of X after having been mapped into feature space
     """
     cuda_fm = self.feature_map.to(self.DEVICE)
-    # Computing mapped X list
-    mapped_X = [cuda_fm(x.unsqueeze(0).to(self.DEVICE)).to('cpu') for x in X]
+    # Computing mapped X list (using explicit for because of CUDA :/)
+    mapped_X = []
+    for x in X:
+        cuda_x = x.unsqueeze(0).to(self.DEVICE)
+        mapped_x = cuda_fm(cuda_x).to('cpu')
+        mapped_X.append(mapped_x)
+        del cuda_x
+        del mapped_x
+        torch.cuda.empty_cache()
+
     mapped_X = torch.cat(mapped_X)
     class_mean = mapped_X.mean(dim = 0)
     return class_mean
