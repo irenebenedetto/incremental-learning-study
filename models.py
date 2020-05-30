@@ -154,7 +154,7 @@ class FrankenCaRL():
     optimizer = optim.SGD(self.net.parameters(), lr=self.LR, weight_decay=self.WEIGHT_DECAY, momentum=self.MOMENTUM)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.MILESTONE, gamma=self.GAMMA)
     
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCEWithLogitsLoss(reduction='none')
 
     dataloader = DataLoader(D, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4, drop_last=False)
     
@@ -175,12 +175,12 @@ class FrankenCaRL():
         labels_onehot = nn.functional.one_hot(labels, self.num_tot_classes).type_as(outputs)
 
         if num_old_classes == 0 or not distillation:
-          loss = criterion(outputs, labels_onehot)
+          loss = criterion(outputs, labels_onehot).sum(dim=1).mean()
         else:
           labels_onehot = labels_onehot.type_as(outputs)[:, num_old_classes:]
           out_old = torch.sigmoid(old_net(images))[:,:num_old_classes]
           target = torch.cat((out_old, labels_onehot), dim=1)
-          loss = criterion(outputs, target)
+          loss = criterion(outputs, target).sum(dim=1).mean()
         
         mean_loss_epoch += loss.item()
         loss.backward()
