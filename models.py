@@ -44,7 +44,11 @@ class FrankenCaRL():
 
     # Set loss to use
     self.custom_loss = custom_loss
-    self.loss_params = loss_params
+    
+    if loss_params is None:
+      self.loss_params = {}
+    else:
+      self.loss_params = loss_params
 
   def set_params(self, params):
     self.MOMENTUM = params['MOMENTUM']
