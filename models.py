@@ -22,7 +22,7 @@ class FrankenCaRL():
   """
   Implements iCaRL as decribed in *insert paper*
   """
-  def __init__(self, net):
+  def __init__(self, net, custom_loss = None, loss_params = None):
     self.exemplar_sets = []
     self.class_means = []
     # Inizializing with parameters from paper ** insert reference **
@@ -34,13 +34,17 @@ class FrankenCaRL():
     self.GAMMA = 0.2
     self.NUM_EPOCHS = 70
     self.DEVICE = 'cuda'
-    
+
     self.net = deepcopy(net).to(self.DEVICE)
 
     self.num_tot_classes = 0
 
     self.accuracies_nmc = []
     self.accuracies_fc = []
+
+    # Set loss to use
+    self.custom_loss = custom_loss
+    self.loss_params = loss_params
 
   def set_params(self, params):
     self.MOMENTUM = params['MOMENTUM']
@@ -92,10 +96,10 @@ class FrankenCaRL():
       self.class_means.append(mean)
 
   def classify(self, X):
-    
+
     torch.cuda.empty_cache()
     with torch.no_grad():
-      
+
       self.net.eval()
 
       # Compute feature mappings of batch
@@ -112,11 +116,11 @@ class FrankenCaRL():
         distances_from_class = (ex_means - x).norm(dim=1)
         y = distances_from_class.argmin()
         labels.append(y)
-      
+
       labels = torch.stack(labels).type(torch.long)
       torch.cuda.empty_cache
       return labels
-    
+
 
   def update_representation(self, train_dataset, use_exemplars=True, distillation=True):
     """
@@ -125,14 +129,14 @@ class FrankenCaRL():
     Returns:
       La bici di Bibbona
     """
-    
+
     # Concatenate current exemplar sets with respective labels
     exemplars_dataset = []
     for label, exemplar_set in enumerate(self.exemplar_sets):
       for exemplar in exemplar_set:
         exemplars_dataset.append((exemplar, label))
-    
-    
+
+
     num_new_classes = len(np.unique(train_dataset.targets))
     #if use_exemplars:
     #  num_old_classes = len(self.exemplar_sets)
@@ -146,26 +150,25 @@ class FrankenCaRL():
       D = MergeDataset(train_dataset, exemplars_dataset, augment2=False)
     else:
       D = train_dataset
-    
-    # If this is not the first training, we save the old network
-    if num_old_classes > 0:
-      old_net = deepcopy(self.net)
+
+    # Save the old network for distillation
+    old_net = deepcopy(self.net)
 
     optimizer = optim.SGD(self.net.parameters(), lr=self.LR, weight_decay=self.WEIGHT_DECAY, momentum=self.MOMENTUM)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.MILESTONE, gamma=self.GAMMA)
-    
+
     criterion = nn.BCEWithLogitsLoss(reduction='none')
 
     dataloader = DataLoader(D, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4, drop_last=False)
-    
+
     for epoch in range(self.NUM_EPOCHS):
       print(f'EPOCH {epoch+1}/{self.NUM_EPOCHS}, LR = {scheduler.get_last_lr()}')
 
-      mean_loss_epoch = 0      
+      mean_loss_epoch = 0
       for images, labels in dataloader:
         images = images.to(self.DEVICE)
         labels = labels.to(self.DEVICE)
-        
+
         self.net.train()
         optimizer.zero_grad()
 
@@ -174,14 +177,18 @@ class FrankenCaRL():
         # One hot encoding labels for binary cross-entropy loss
         labels_onehot = nn.functional.one_hot(labels, self.num_tot_classes).type_as(outputs)
 
-        if num_old_classes == 0 or not distillation:
-          loss = criterion(outputs, labels_onehot).sum(dim=1).mean()
+        if self.custom_loss is None:
+            # If custom loss is not specified, original iCaRL loss is used
+            if num_old_classes == 0 or not distillation:
+                loss = criterion(outputs, labels_onehot).sum(dim=1).mean()
+            else:
+                labels_onehot = labels_onehot.type_as(outputs)[:, num_old_classes:]
+                out_old = torch.sigmoid(old_net(images))[:,:num_old_classes]
+                target = torch.cat((out_old, labels_onehot), dim=1)
+                loss = criterion(outputs, target).sum(dim=1).mean()
         else:
-          labels_onehot = labels_onehot.type_as(outputs)[:, num_old_classes:]
-          out_old = torch.sigmoid(old_net(images))[:,:num_old_classes]
-          target = torch.cat((out_old, labels_onehot), dim=1)
-          loss = criterion(outputs, target).sum(dim=1).mean()
-        
+            loss = self.custom_loss(self, images, labels, old_net, **self.loss_params)
+
         mean_loss_epoch += loss.item()
         loss.backward()
         optimizer.step()
@@ -189,27 +196,27 @@ class FrankenCaRL():
       scheduler.step()
       print(f"Mean batch loss: {mean_loss_epoch/len(dataloader):.5}")
       # --- end epoch
-    
+
     torch.cuda.empty_cache()
 
   def incremental_train(self, train_dataset,train_dataset_no_aug, test_dataset, K, use_exemplars=True, all_data_means=True, distillation=True):
     labels = train_dataset.targets
     new_classes = np.unique(labels)
     print(f'Arriving new classes {new_classes}')
-    
+
     # Compute number of total labels
     num_old_labels = len(self.exemplar_sets)
     num_new_labels = len(new_classes)
 
     t = num_old_labels + num_new_labels
-    
+
     self.update_representation(train_dataset, use_exemplars=use_exemplars, distillation=distillation)
-    
+
     m = int(K/t)
     self.reduce_exemplar_set(m=m)
 
     gc.collect()
-    
+
     for label in new_classes:
       bool_idx = (train_dataset_no_aug.targets == label)
       idx = np.argwhere(bool_idx).flatten()
@@ -221,7 +228,7 @@ class FrankenCaRL():
         images_of_y.append(img)
 
       images_of_y = torch.stack(images_of_y)
-      
+
       if use_exemplars:
         self.construct_exemplar_set(X=images_of_y, y=label, m=m)
 
@@ -233,7 +240,7 @@ class FrankenCaRL():
       del bool_idx
       del idx
 
-    
+
     if not all_data_means:
       self.compute_exemplars_means()
 
@@ -244,12 +251,12 @@ class FrankenCaRL():
 
   def reduce_exemplar_set(self, m):
     """
-    The function reduces the number of images for each exampler set at m 
-      
+    The function reduces the number of images for each exampler set at m
+
     Params:
       m: number of elements that has to be collected
     Return:
-      the list of exemplar_sets updated 
+      the list of exemplar_sets updated
 
     """
     for i, exemplar_set in enumerate(self.exemplar_sets):
@@ -272,7 +279,7 @@ class FrankenCaRL():
         phi_X_batch = self.net.feature_extractor(images)
         phi_X.append(phi_X_batch)
         del images
-      
+
       phi_X = torch.cat(phi_X).to('cpu')
       mu_y = phi_X.mean(dim=0)
 
@@ -291,7 +298,7 @@ class FrankenCaRL():
         phi_p = self.net.feature_extractor(p.to(self.DEVICE))
         sum_taken_exemplars = sum_taken_exemplars + phi_p.to('cpu')
         del phi_p
-      
+
       Py = torch.stack(Py)
       self.exemplar_sets.append(Py) # for dictionary version: self.exemplar_sets[y] = Py
 
@@ -307,14 +314,14 @@ class FrankenCaRL():
       # print(f"Test labels: {np.unique(labels.numpy())}")
       images = images.to(self.DEVICE)
       labels = labels.to(self.DEVICE)
-    
+
       # Get prediction with  NMC
       preds = self.classify(images).to(self.DEVICE)
 
       # Update Corrects
       running_corrects += torch.sum(preds == labels.data).data.item()
       update_confusion_matrix(matrix, preds, labels)
-    
+
     # Calculate Accuracy and mean loss
     accuracy = running_corrects / len(test_dataloader.dataset)
     self.accuracies_nmc.append(accuracy)
@@ -323,7 +330,7 @@ class FrankenCaRL():
 
   def test_fc(self, test_dataset):
     self.net.eval()
-  
+
     test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
     running_corrects = 0
     t = self.num_tot_classes
@@ -333,7 +340,7 @@ class FrankenCaRL():
       # print(f"Test labels: {np.unique(labels.numpy())}")
       images = images.to(self.DEVICE)
       labels = labels.to(self.DEVICE)
-    
+
       outputs = self.net(images)[:,:self.num_tot_classes]
       _, preds = torch.max(outputs.data, 1)
 
@@ -341,10 +348,9 @@ class FrankenCaRL():
 
       # Update Corrects
       running_corrects += torch.sum(preds == labels.data).data.item()
-    
+
     # Calculate Accuracy and mean loss
     accuracy = running_corrects / len(test_dataloader.dataset)
     self.accuracies_fc.append(accuracy)
     print(f'\033[94mAccuracy on test set with fc :{accuracy}\x1b[0m')
     show_confusion_matrix(matrix)
-  
