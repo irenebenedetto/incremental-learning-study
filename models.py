@@ -16,7 +16,7 @@ import torch.utils.model_zoo as model_zoo
 import gc
 from copy import deepcopy
 from MLDL.utils import *
-from project_dataset import MergeDataset
+from MLDL.project_dataset import MergeDataset
 
 class FrankenCaRL():
   """
