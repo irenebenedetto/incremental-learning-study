@@ -20,11 +20,14 @@ from MLDL.project_dataset import MergeDataset
 
 class FrankenCaRL():
   """
-  Implements iCaRL as decribed in *insert paper*
+  Implements iCaRL as decribed in *insert paper* (the actual name of the paper is *insert paper*)
+
+  The behavior of "distillation" flag is overridden if a custom loss is used.
   """
-  def __init__(self, net, custom_loss = None, loss_params = None):
+  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True):
     self.exemplar_sets = []
     self.class_means = []
+    self.K = K
     # Inizializing with parameters from paper ** insert reference **
     self.MOMENTUM = 0.9
     self.LR = 2
@@ -35,16 +38,21 @@ class FrankenCaRL():
     self.NUM_EPOCHS = 70
     self.DEVICE = 'cuda'
 
+    # Internal flags to set FrankenCaRL's behavior
+    self.use_exemplars = use_exemplars
+    self.distillation = distillation
+    self.all_data_means = all_data_means
+
+    # Keep internal copy of the network
     self.net = deepcopy(net).to(self.DEVICE)
 
+    # Other internal parameters
     self.num_tot_classes = 0
-
     self.accuracies_nmc = []
     self.accuracies_fc = []
-
     # Set loss to use
     self.custom_loss = custom_loss
-    
+
     if loss_params is None:
       self.loss_params = {}
     else:
@@ -89,7 +97,7 @@ class FrankenCaRL():
       Params:
         - X: images that belong to a single class label
       Returns:
-        A sandwich
+        A delicious ham sandwich
     """
     self.net.eval()
 
@@ -126,7 +134,7 @@ class FrankenCaRL():
       return labels
 
 
-  def update_representation(self, train_dataset, use_exemplars=True, distillation=True):
+  def update_representation(self, train_dataset):
     """
     Update something
 
@@ -150,7 +158,7 @@ class FrankenCaRL():
     self.num_tot_classes = num_tot_classes
 
     # Create big D dataset
-    if use_exemplars:
+    if self.use_exemplars:
       D = MergeDataset(train_dataset, exemplars_dataset, augment2=False)
     else:
       D = train_dataset
@@ -183,7 +191,7 @@ class FrankenCaRL():
 
         if self.custom_loss is None:
             # If custom loss is not specified, original iCaRL loss is used
-            if num_old_classes == 0 or not distillation:
+            if num_old_classes == 0 or not self.distillation:
                 loss = criterion(outputs, labels_onehot).sum(dim=1).mean()
             else:
                 labels_onehot = labels_onehot.type_as(outputs)[:, num_old_classes:]
@@ -203,7 +211,7 @@ class FrankenCaRL():
 
     torch.cuda.empty_cache()
 
-  def incremental_train(self, train_dataset,train_dataset_no_aug, test_dataset, K, use_exemplars=True, all_data_means=True, distillation=True):
+  def incremental_train(self, train_dataset, train_dataset_no_aug, test_dataset):
     labels = train_dataset.targets
     new_classes = np.unique(labels)
     print(f'Arriving new classes {new_classes}')
@@ -214,9 +222,9 @@ class FrankenCaRL():
 
     t = num_old_labels + num_new_labels
 
-    self.update_representation(train_dataset, use_exemplars=use_exemplars, distillation=distillation)
+    self.update_representation(train_dataset)
 
-    m = int(K/t)
+    m = int(self.K/t)
     self.reduce_exemplar_set(m=m)
 
     gc.collect()
@@ -233,10 +241,10 @@ class FrankenCaRL():
 
       images_of_y = torch.stack(images_of_y)
 
-      if use_exemplars:
+      if self.use_exemplars:
         self.construct_exemplar_set(X=images_of_y, y=label, m=m)
 
-      if all_data_means:
+      if self.all_data_means:
         self.compute_class_means_with_training(images_of_y)
 
       torch.no_grad()
@@ -245,10 +253,10 @@ class FrankenCaRL():
       del idx
 
 
-    if not all_data_means:
+    if not self.all_data_means:
       self.compute_exemplars_means()
 
-    if use_exemplars:
+    if self.use_exemplars:
         self.test_ncm(test_dataset)
     self.test_fc(test_dataset)
 
