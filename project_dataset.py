@@ -66,10 +66,10 @@ class SubCIFAR100(Dataset):
     '''
     image = self.pil_loader(self.data[index])
     label = self.targets[index]
-    
+
     if self.transform is not None:
         image = self.transform(image)
-    
+
     return image, label
 
 class MergeDataset():
@@ -112,13 +112,13 @@ class CIFARFactory():
   Factory class for retrieving re-mapped SubCifar100 datasets. Can accidentally destroy the world.
   """
 
-  def __init__(self, seed=3, shuffle_classes=True, split_size=10):
+  def __init__(self, seed=2124, shuffle_classes=True, split_size=10):
     self.CIFAR100_LABELS_LIST = [
-      'apple', 'aquarium_fish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle', 
-      'bicycle', 'bottle', 'bowl', 'boy', 'bridge', 'bus', 'butterfly', 'camel', 
-      'can', 'castle', 'caterpillar', 'cattle', 'chair', 'chimpanzee', 'clock', 
-      'cloud', 'cockroach', 'couch', 'crab', 'crocodile', 'cup', 'dinosaur', 
-      'dolphin', 'elephant', 'flatfish', 'forest', 'fox', 'girl', 'hamster', 
+      'apple', 'aquarium_fish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle',
+      'bicycle', 'bottle', 'bowl', 'boy', 'bridge', 'bus', 'butterfly', 'camel',
+      'can', 'castle', 'caterpillar', 'cattle', 'chair', 'chimpanzee', 'clock',
+      'cloud', 'cockroach', 'couch', 'crab', 'crocodile', 'cup', 'dinosaur',
+      'dolphin', 'elephant', 'flatfish', 'forest', 'fox', 'girl', 'hamster',
       'house', 'kangaroo', 'keyboard', 'lamp', 'lawn_mower', 'leopard', 'lion',
       'lizard', 'lobster', 'man', 'maple_tree', 'motorcycle', 'mountain', 'mouse',
       'mushroom', 'oak_tree', 'orange', 'orchid', 'otter', 'palm_tree', 'pear',
@@ -135,7 +135,7 @@ class CIFARFactory():
     self.original_labels = np.arange(100)
     if shuffle_classes == True:
       np.random.shuffle(self.original_labels)
-    
+
     self.mapped_labels = np.arange(100)
     # Also geenrating classes in ranges 0 to N
     self.zero_N_labels = self.mapped_labels % split_size
@@ -153,7 +153,7 @@ class CIFARFactory():
                                       transforms.ToTensor(), # Turn PIL Image to torch.Tensor
                                       transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))  # https://gist.github.com/weiaicunzai/e623931921efefd4c331622c344d8151
                                       ])
-    
+
     self.no_transform = transforms.Compose([
                                       transforms.ToTensor(),
                                       transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
@@ -168,7 +168,7 @@ class CIFARFactory():
       transform = self.train_transform
     else:
       transform = self.no_transform
-    
+
     dataset = SubCIFAR100(self.original_sets[step], mapping, train=True, transform=transform, download=(not self.downloaded_dataset))
     self.downloaded_dataset = True
     return dataset
