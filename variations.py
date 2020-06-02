@@ -15,7 +15,7 @@ def temperature_distillation_loss(self, images, labels, old_net, T=2, w_old_labe
         - w_old_labels: weight for classification loss
         - w_distillation: weight for distillation loss
     Return:
-        the value of the loss 
+        the value of the loss
     """
     outputs = self.net(images)[:, :self.num_tot_classes]
     num_old_classes = len(self.exemplar_sets)
@@ -33,7 +33,7 @@ def temperature_distillation_loss(self, images, labels, old_net, T=2, w_old_labe
     # For classification loss, all outputs of new network and corresponding one hot labels are used
     softmax_outputs_new_network = nn.functional.softmax(outputs, dim=1) # new network outputs
     labels_onehot = nn.functional.one_hot(labels, self.num_tot_classes).type_as(outputs)
-    
+
     # Weight down classification loss on old outputs
     W_old_labels = torch.ones(num_old_classes) * w_old_labels
     W_distillation = torch.ones(num_old_classes) * w_distillation
@@ -46,20 +46,21 @@ def temperature_distillation_loss(self, images, labels, old_net, T=2, w_old_labe
     loss = -loss_targets*torch.log(loss_inputs)
     return loss.sum(dim=1).mean()
 
-def l2_loss(self, images, labels, old_net):
+def l2_loss(self, images, labels, old_net, distillation_weight=40):
     """
      The function compute the l2 loss as distillation loss and a cross entropy loss for the classification task
+     Default distillation weight was found by brutally and unscientifically testing higher and higher values.
      Params:
          images: to classify
          labels
-         num_old_classes: number of old classes 
-         old_net: old network used to compute 
+         num_old_classes: number of old classes
+         old_net: old network used to compute
     Returns:
         TUA MAMMA               /the value of the total loss (distillation + classification)
     """
     outputs = self.net(images)[:, :self.num_tot_classes]
     num_old_classes = len(self.exemplar_sets)
-      
+
     if num_old_classes == 0:
         cross_entropy = nn.CrossEntropyLoss()
         loss = cross_entropy(outputs, labels)
@@ -68,14 +69,14 @@ def l2_loss(self, images, labels, old_net):
         l2_loss = nn.MSELoss()          # l2 loss
         CELoss = nn.CrossEntropyLoss()  # cross entropy loss
 
-        fts_old = old_net.feature_extractor(images) 
+        fts_old = old_net.feature_extractor(images)
         fts_new = self.net.feature_extractor(images)
-        
+
         s = nn.Softmax(dim=1)
-        
+
         class_loss = CELoss(outputs, labels)
-        dist_loss_l2 = l2_loss(fts_new, fts_old)*40
-        
+        dist_loss_l2 = l2_loss(fts_new, fts_old) * distillation_weight
+
         loss = class_loss + dist_loss_l2
 
     return loss
@@ -92,7 +93,7 @@ def less_forget_constraint_loss(self, old_net, images, labels,num_old_classes, l
     """
     inputs = self.net(images)
     targets = labels
-    # cross entropy loss for classification 
+    # cross entropy loss for classification
     loss_ce = nn.functional.cross_entropy(inputs, targets, reduction='none')
 
     # lambda parameter for less-forget constraint loss
@@ -114,9 +115,9 @@ def less_forget_constraint_loss(self, old_net, images, labels,num_old_classes, l
             loss_mr += torch.nn.functional.margin_ranking_loss(anchor, topK_hard_negatives, target=torch.ones(K), margin=m, reduction='none').sum()
 
     # computing the total loss for the batch
-    loss = (1/batch_size) * torch.sum(loss_ce + lmbd * dist_loss) + (1/num_old_classes) * loss_mr 
+    loss = (1/batch_size) * torch.sum(loss_ce + lmbd * dist_loss) + (1/num_old_classes) * loss_mr
     return loss
-        
+
 
 # CLASSIFICATION VARIATION
 
@@ -138,7 +139,7 @@ def test_svc(self, test_dataset):
 
         # Update Corrects
         running_corrects += torch.sum(torch.Tensor(preds) == labels.data).data.item()
-      
+
       # Calculate Accuracy and mean loss
       accuracy = running_corrects / len(test_dataloader.dataset)
       print(f'\033[94mAccuracy on test set with svc :{accuracy}\x1b[0m')
@@ -148,13 +149,13 @@ def train_svc(self, X):
     """
         The fucntion perform the training, after the network training on the linear svc
         The svc classifier training function is called AFTER the training of the network
-        with 
+        with
                             self.train_svc(dataloader)
         Params:
             X: the dataloader with new class images and exemplars
         Returns:
             scv trained
-        
+
     """
     print('Training svc')
     with torch.no_grad():
@@ -172,5 +173,3 @@ def train_svc(self, X):
       svc.fit(all_fts, all_labels)
       self.svc = svc
       return svc
-
-
