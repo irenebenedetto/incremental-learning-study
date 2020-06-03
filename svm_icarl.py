@@ -36,7 +36,7 @@ class SVMiCaRL():
         self.MILESTONE = [48, 62]
         self.WEIGHT_DECAY = 1e-5
         self.GAMMA = 0.2
-        self.NUM_EPOCHS = 3
+        self.NUM_EPOCHS = 70
         self.DEVICE = 'cuda'
 
         # Internal flags to set FrankenCaRL's behavior
@@ -176,7 +176,7 @@ class SVMiCaRL():
         return D
 
     def train_SVM(self, dataset):
-         """
+        """
         The fucntion perform the training, after the network training on the linear svc
         The svc classifier training function is called AFTER the training of the network
         with 
@@ -186,6 +186,7 @@ class SVMiCaRL():
         
         """
         print('Training SVM...')
+
         svc = SVC(kernel='linear', tol=0.0001)
         dataloader = DataLoader(dataset, batch_size=100, shuffle=False, drop_last=False, num_workers=4)
 
