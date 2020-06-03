@@ -1,4 +1,10 @@
-from models import FrankenCaRL
+from MLDL.models import FrankenCaRL
+import numpy as np
+import torch
+from torch import nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+import gc
 
 class TherapyFrankenCaRL(FrankenCaRL):
     def __init__(self, net, SpecialistModel, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True):
@@ -7,7 +13,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
         self.specialist_yellow_pages = dict()
 
 
-    def train_specialist(dataset):
+    def train_specialist(self, dataset):
         """
         Trains a specialist using the dataset, assigns it to the corresponding mapping.
         Returns:
@@ -15,7 +21,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
         """
         incoming_labels = np.unique(dataset.targets)
         print(f"Training specialist for labels {incoming_labels}...")
-        specialist = SpecialistModel(num_classes=100).to(self.DEVICE)
+        specialist = self.SpecialistModel().to(self.DEVICE)
 
         # The parameters of iCaRL are used in the model, except for the number of epochs
         criterion = nn.BCEWithLogitsLoss(reduction='none')
@@ -23,7 +29,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
         optimizer = optim.SGD(specialist.parameters(), lr=0.2, weight_decay=5e-5, momentum=0.9)
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20], gamma=0.5)
 
-        dataloader = DataLoader(dataset, batch_size=64, num_workers=4, shuffle=True, drop_last=False)
+        dataloader = DataLoader(dataset, batch_size=32, num_workers=4, shuffle=True, drop_last=False)
 
         NUM_EPOCHS_SPECIALIST = 30
         for epoch in range(NUM_EPOCHS_SPECIALIST):
@@ -54,14 +60,14 @@ class TherapyFrankenCaRL(FrankenCaRL):
         torch.cuda.empty_cache()
         # Append specialist to appropriate values in the dictionary
         specialist.eval()
-        specialist_yellow_pages[tuple(incoming_labels)] = specialist
+        self.specialist_yellow_pages[tuple(incoming_labels)] = specialist
 
 
     def classify(self, X, num_min_distances=3):
-    """
-    Does classification, optionally by asking specialists.
+      """
+      Does classification, optionally by asking specialists.
 
-    """
+      """
       torch.cuda.empty_cache()
       with torch.no_grad():
         self.net.eval()
@@ -72,12 +78,13 @@ class TherapyFrankenCaRL(FrankenCaRL):
         # Find nearest mean for each phi_x
         labels = []
         ex_means = torch.stack(self.class_means)
-        for x in phi_X: # changed from norm_phi_X
+        for i, x in enumerate(phi_X): # changed from norm_phi_X
             # broadcasting x to shape of exemaplar_means
             distances_from_class = (ex_means - x).norm(dim=1)
             closest_classes = torch.argsort(distances_from_class)[:num_min_distances]
             # Clostest classes are now the candidates classes. We ask the corresponding specialists for consultation
-            y = self.ask_specialists(x, closest_classes)
+            # Pass the unmapped x to the specialist
+            y = self.ask_specialists(X[i], closest_classes)
             labels.append(y)
         labels = torch.stack(labels).type(torch.long)
         torch.cuda.empty_cache
@@ -97,12 +104,13 @@ class TherapyFrankenCaRL(FrankenCaRL):
                     break # dirty trick: break to keep right specialist and specialized labels
 
             # Forward the image into the specialist
-            out_prob = nn.functional.softmax(specialist(x.unsqueeze(0)).squeeze())[candidate_class]
+            out_prob = nn.functional.softmax(specialist(x.unsqueeze(0)).squeeze(), dim=0)[candidate_class]
             out_prob = out_prob.cpu().item()
             probabilities.append(out_prob)
 
         # Now take the highest probability
         predicted_label = candidate_classes[np.argmax(probabilities)]
+        # print(f"Calling specialist resulted in {predicted_label}. ", end="")
         return predicted_label
 
 
