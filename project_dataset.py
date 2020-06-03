@@ -112,7 +112,7 @@ class CIFARFactory():
   Factory class for retrieving re-mapped SubCifar100 datasets. Can accidentally destroy the world.
   """
 
-  def __init__(self, seed=2124, shuffle_classes=True, split_size=10):
+  def __init__(self, seed=1993, shuffle_classes=True, split_size=10):
     self.CIFAR100_LABELS_LIST = [
       'apple', 'aquarium_fish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle',
       'bicycle', 'bottle', 'bowl', 'boy', 'bridge', 'bus', 'butterfly', 'camel',
