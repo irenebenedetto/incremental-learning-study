@@ -68,7 +68,7 @@ def plot_metrics(x, y, name, xlabel, ylabel, title):
   """
   
   color = cm.coolwarm(np.linspace(0,1,len(y)))
-  plt.figure(figsize=(10, 5))
+  plt.figure(figsize=(15, 10))
   for yi, namei, c in zip(y, name, color):
     plt.plot(x, yi, marker='o', color=c, markersize=10, linewidth=4, label = namei)
 
