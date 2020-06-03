@@ -140,6 +140,7 @@ class FrankenCaRL():
 
     Returns:
       La bici di Bibbona
+      The merged dataset D
     """
 
     # Concatenate current exemplar sets with respective labels
@@ -210,6 +211,7 @@ class FrankenCaRL():
       # --- end epoch
 
     torch.cuda.empty_cache()
+    return D
 
   def incremental_train(self, train_dataset, train_dataset_no_aug, test_dataset):
     labels = train_dataset.targets
