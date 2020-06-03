@@ -14,19 +14,20 @@ class TherapyFrankenCaRL(FrankenCaRL):
             A sound mind
         """
         incoming_labels = np.unique(dataset.targets)
+        print(f"Training specialist for labels {incoming_labels}...")
         specialist = SpecialistModel(num_classes=100).to(self.DEVICE)
 
         # The parameters of iCaRL are used in the model, except for the number of epochs
         criterion = nn.BCEWithLogitsLoss(reduction='none')
 
-        optimizer = optim.SGD(specialist.parameters(), lr=self.LR, weight_decay=self.WEIGHT_DECAY, momentum=self.MOMENTUM)
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.MILESTONE, gamma=self.GAMMA)
+        optimizer = optim.SGD(specialist.parameters(), lr=0.2, weight_decay=5e-5, momentum=0.9)
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20], gamma=0.5)
 
-        dataloader = DataLoader(dataset, batch_size=self.BATCH_SIZE, num_workers=4, shuffle=True, drop_last=False)
+        dataloader = DataLoader(dataset, batch_size=64, num_workers=4, shuffle=True, drop_last=False)
 
         NUM_EPOCHS_SPECIALIST = 30
         for epoch in range(NUM_EPOCHS_SPECIALIST):
-          print(f'SPECIALIST EPOCH {epoch+1}/{NUM_EPOCHS_SPECIALIST}, LR = {scheduler.get_last_lr()}')
+          # print(f'SPECIALIST EPOCH {epoch+1}/{NUM_EPOCHS_SPECIALIST}, LR = {scheduler.get_last_lr()}')
 
           mean_loss_epoch = 0
           for images, labels in dataloader:
@@ -47,7 +48,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
             optimizer.step()
             # --- end batch
           scheduler.step()
-          print(f"Mean batch loss: {mean_loss_epoch/len(dataloader):.5}")
+          # print(f"Mean batch loss: {mean_loss_epoch/len(dataloader):.5}")
           # --- end epoch
 
         torch.cuda.empty_cache()
