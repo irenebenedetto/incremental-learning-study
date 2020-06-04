@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch
-from sklearn.svm import LinearSVC
 
 # LOSS VARIATION
 
