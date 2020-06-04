@@ -81,38 +81,40 @@ def l2_loss(self, images, labels, old_net):
     return loss
 
 
-def less_forget_constraint_loss(self, old_net, images, labels,num_old_classes, lambda_base=5, m=0.5, K=2):
-    """
-        Implementation of loss as .... paper
+def less_forget_loss(self, images, labels, old_net, lambda_base=2.5, m=0.5, K=2):
+    inputs = self.net.forward_cosine(images)
+    num_tot_classes = self.num_tot_classes
+    num_old_classes = len(self.exemplar_sets)
+    num_new_classes = num_tot_classes - num_old_classes
 
-        Params:
-
-        Return:
-            loss, sum of distillation and classification loss
-    """
-    inputs = self.net(images)
     targets = labels
     # cross entropy loss for classification 
     loss_ce = nn.functional.cross_entropy(inputs, targets, reduction='none')
 
+    # Handle case for first batch
+    if num_old_classes == 0:
+        return loss_ce.mean()
+
     # lambda parameter for less-forget constraint loss
-    lmbd = lambda_base * np.sqrt((self.num_tot_classes - num_old_classes)/(num_old_classes))
+    lmbd = lambda_base * np.sqrt(num_new_classes/num_old_classes)
 
     feature_old = old_net.feature_extractor(images)
     feature_new = self.net.feature_extractor(images)
     # less-forget constraint loss
     dist_loss = 1 - (feature_old * feature_new).sum(1)
 
+    # MATRIX ATTEMPT FOR LESS FORGETTING LOSS
+    exemplar_idx = sum(labels.cpu().numpy() == label for label in range(num_old_classes)).astype(bool)
+    exemplar_labels = labels[exemplar_idx].type(torch.long)
+    anchors = inputs[exemplar_idx, exemplar_labels] / self.net.eta()
+    out_new_classes = inputs[exemplar_idx, num_old_classes:] / self.net.eta()
+    topK_hard_negatives, _ = torch.topk(out_new_classes, 2)
+    # print(f'topK_hard_negatives shape: {topK_hard_negatives.shape}') #num of exemplars in batch
+    loss_mr = torch.max(m - anchors.unsqueeze(1).to(self.DEVICE) + topK_hard_negatives.to(self.DEVICE), torch.zeros(1).to(self.DEVICE)).sum(dim=1).mean()
+
     # inter-class separaton loss (already summed over exemplars of a batch)
     batch_size = images.size(0)
-    loss_mr = 0
-    for i, label in enumerate(labels):
-        if label in range(num_old_classes):
-            anchor = inputs/self.net.eta[i, label]
-            inputs_new_classes = inputs[i, num_old_classes:]/self.net.eta
-            topK_hard_negatives = torch.topk(inputs_new_classes, 2)[0]
-            loss_mr += torch.nn.functional.margin_ranking_loss(anchor, topK_hard_negatives, target=torch.ones(K), margin=m, reduction='none').sum()
 
     # computing the total loss for the batch
-    loss = (1/batch_size) * torch.sum(loss_ce + lmbd * dist_loss) + (1/num_old_classes) * loss_mr 
+    loss = (1/batch_size) * torch.sum(loss_ce + lmbd * dist_loss) + loss_mr 
     return loss
