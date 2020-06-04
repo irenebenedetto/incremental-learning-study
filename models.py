@@ -24,7 +24,7 @@ class FrankenCaRL():
 
   The behavior of "distillation" flag is overridden if a custom loss is used.
   """
-  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True):
+  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, remove_duplicates=True):
     self.exemplar_sets = []
     self.class_means = []
     self.K = K
@@ -42,6 +42,7 @@ class FrankenCaRL():
     self.use_exemplars = use_exemplars
     self.distillation = distillation
     self.all_data_means = all_data_means
+    self.remove_duplicates = remove_duplicates
 
     # Keep internal copy of the network
     self.net = deepcopy(net).to(self.DEVICE)
@@ -311,6 +312,9 @@ class FrankenCaRL():
         p = p.unsqueeze(0)
         phi_p = self.net.feature_extractor(p.to(self.DEVICE))
         sum_taken_exemplars = sum_taken_exemplars + phi_p.to('cpu')
+        if self.remove_duplicates:
+          X = torch.cat((X[:min_index], X[min_index+1:]), dim = 0)
+          phi_X = torch.cat((phi_X[:min_index], phi_X[min_index+1:]), dim = 0)
         del phi_p
 
       Py = torch.stack(Py)
