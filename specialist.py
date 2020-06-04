@@ -84,13 +84,68 @@ class TherapyFrankenCaRL(FrankenCaRL):
             closest_classes = torch.argsort(distances_from_class)[:num_min_distances]
             # Clostest classes are now the candidates classes. We ask the corresponding specialists for consultation
             # Pass the unmapped x to the specialist
-            y = self.ask_specialists(X[i], closest_classes)
+            y = self.ask_specialists_hard(X[i], closest_classes)
             labels.append(y)
         labels = torch.stack(labels).type(torch.long)
         torch.cuda.empty_cache
         return labels
 
-    def ask_specialists(self, x, candidate_classes):
+    def KL(self, P, Q):
+        return (P * (P / Q).log()).sum()
+
+    def classify_fc(self, x, num_ask_specialists=3):
+        """
+        Classify using fc and asking specialists
+        """
+        self.net.eval()
+
+        X = X.to(self.DEVICE)
+
+        # Forward images and get the most activated label(s)
+        pred_labels = []
+        for x in X:
+            activations = self.net(x.unsqueeze(0)).squeeze()[:self.num_tot_classes]
+            pg = nn.functional.softmax(activations, dim=0)
+
+            most_active_labels = torch.argsort(pg, descending=True)[:num_ask_specialists]
+            specialist_opinions = [get_specialist_opinion(x, label) for label in most_active_labels] # list of prob distros
+
+            # Minimize KL divergenge starting from uniform distro or something
+            q = torch.ones(pg.size()) * 1/pg.size(0)
+            q.requires_grad = True
+            # Use sgd to minimize KL distance
+            sgd = optim.SGD([q], lr=0.01)
+            for i in range(100):
+                sgd.zero_grad()
+                qp = nn.functional.softmax(q)
+                loss = self.KL(pg, qp) + sum([self.KL(pm, qp) for pm in specialist_opinions])
+                loss.backward()
+                sgd.step()
+            # Security check
+            if torch.isnan(qp):
+                print(f"qp went to nan while minimizing KL!")
+
+            final_prob = nn.functional.softmax(qp, dim=0)
+            # We can now take the highest probability
+            _, pred_label = torch.max(final_prob)
+            pred_labels.append(pred_label.squeeze().item())
+        # concatenate the predicted labels and return them as tensor
+        return torch.cat(pred_labels)
+
+
+    def get_specialist_opinion(self, x, candidate_label):
+        """
+        Given image x and a candidate label, return the distribution given by its specialist.
+        Thus, returs a probability distribution pm.
+        """
+        for specialized_labels, specialist in self.specialist_yellow_pages.items():
+            if candidate_label in specialized_labels:
+                break # dirty trick: break to keep right specialist and specialized labels
+        # We now have the right specialist
+        pm = nn.functional.softmax(specialist(x.unsqueeze(0)).squeeze(), dim=0)
+        return pm
+
+    def ask_specialists_hard(self, x, candidate_classes):
         """
         Call the specialists of the candidate classes and ask for therapy to help in the prediction.
         Returns:
@@ -112,6 +167,8 @@ class TherapyFrankenCaRL(FrankenCaRL):
         predicted_label = candidate_classes[np.argmax(probabilities)]
         # print(f"Calling specialist resulted in {predicted_label}. ", end="")
         return predicted_label
+
+
 
 
     def incremental_train(self, train_dataset, train_dataset_no_aug, test_dataset):
