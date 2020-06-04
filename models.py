@@ -213,7 +213,7 @@ class FrankenCaRL():
     torch.cuda.empty_cache()
     return D
 
-  def incremental_train(self, train_dataset, train_dataset_no_aug, test_dataset):
+  def incremental_train(self, train_dataset, test_dataset):
     labels = train_dataset.targets
     new_classes = np.unique(labels)
     print(f'Arriving new classes {new_classes}')
@@ -232,13 +232,13 @@ class FrankenCaRL():
     gc.collect()
 
     for label in new_classes:
-      bool_idx = (train_dataset_no_aug.targets == label)
+      bool_idx = (train_dataset.targets == label)
       idx = np.argwhere(bool_idx).flatten()
       print(f'Constructing exemplar set for label {label} (memory: {len(gc.get_objects())})')
       images_of_y = []
 
       for single_index in idx:
-        img, label = train_dataset_no_aug[single_index]
+        img, label = train_dataset[single_index]
         images_of_y.append(img)
 
       images_of_y = torch.stack(images_of_y)
