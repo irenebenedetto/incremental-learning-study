@@ -93,9 +93,12 @@ class TherapyFrankenCaRL(FrankenCaRL):
     def KL(self, P, Q):
         return (P * (P / Q).log()).sum()
 
-    def classify_fc(self, x, num_ask_specialists=3):
+    def classify_fc(self, X, num_ask_specialists=3):
         """
         Classify using fc and asking specialists
+
+        Returns:
+            Labels predicted for batch X as a torch.Tensor
         """
         self.net.eval()
 
@@ -145,6 +148,39 @@ class TherapyFrankenCaRL(FrankenCaRL):
         pm = nn.functional.softmax(specialist(x.unsqueeze(0)).squeeze(), dim=0)
         return pm
 
+
+    def test_fc(self, test_dataset):
+        """
+        Overrides FrankenCaRL's default test_fc method by using specialist classify.
+        Computes accuracy over entire test set and prints it onscreen.
+        Interestingly enough, does not return any stupid stuff.
+        """
+        self.net.eval()
+
+        test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=False, num_workers=4)
+        running_corrects = 0
+        t = self.num_tot_classes
+        matrix = new_confusion_matrix(lenx=t, leny=t)
+
+        for images, labels in test_dataloader:
+            # print(f"Test labels: {np.unique(labels.numpy())}")
+            images = images.to(self.DEVICE)
+            labels = labels.to(self.DEVICE)
+
+            preds = self.classify_fc(images)
+
+            update_confusion_matrix(matrix, preds, labels)
+
+            # Update Corrects
+            running_corrects += torch.sum(preds == labels.data).data.item()
+
+        # Calculate Accuracy and mean loss
+        accuracy = running_corrects / len(test_dataloader.dataset)
+        self.accuracies_fc.append(accuracy)
+        print(f'\033[94mAccuracy on test set with fc :{accuracy}\x1b[0m')
+        show_confusion_matrix(matrix)
+
+
     def ask_specialists_hard(self, x, candidate_classes):
         """
         Call the specialists of the candidate classes and ask for therapy to help in the prediction.
@@ -167,8 +203,6 @@ class TherapyFrankenCaRL(FrankenCaRL):
         predicted_label = candidate_classes[np.argmax(probabilities)]
         # print(f"Calling specialist resulted in {predicted_label}. ", end="")
         return predicted_label
-
-
 
 
     def incremental_train(self, train_dataset, train_dataset_no_aug, test_dataset):
