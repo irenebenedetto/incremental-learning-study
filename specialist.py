@@ -5,6 +5,7 @@ from torch import nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import gc
+from MLDL.utils import *
 
 class TherapyFrankenCaRL(FrankenCaRL):
     def __init__(self, net, SpecialistModel, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True):
@@ -111,29 +112,28 @@ class TherapyFrankenCaRL(FrankenCaRL):
             pg = nn.functional.softmax(activations, dim=0)
 
             most_active_labels = torch.argsort(pg, descending=True)[:num_ask_specialists]
-            specialist_opinions = [get_specialist_opinion(x, label) for label in most_active_labels] # list of prob distros
+            specialist_opinions = [self.get_specialist_opinion(x, label) for label in most_active_labels] # list of prob distros
 
             # Minimize KL divergenge starting from uniform distro or something
-            q = torch.ones(pg.size()) * 1/pg.size(0)
+            q = (torch.ones(pg.size()) * 1/pg.size(0)).to(self.DEVICE)
             q.requires_grad = True
             # Use sgd to minimize KL distance
             sgd = optim.SGD([q], lr=0.01)
             for i in range(100):
                 sgd.zero_grad()
-                qp = nn.functional.softmax(q)
-                loss = self.KL(pg, qp) + sum([self.KL(pm, qp) for pm in specialist_opinions])
+                qp = nn.functional.softmax(q, dim=0)
+                loss = self.KL(pg.detach(), qp) + sum([self.KL(pm.detach(), qp) for pm in specialist_opinions])
                 loss.backward()
                 sgd.step()
             # Security check
-            if torch.isnan(qp):
+            if torch.isnan(qp).any():
                 print(f"qp went to nan while minimizing KL!")
-
             final_prob = nn.functional.softmax(qp, dim=0)
             # We can now take the highest probability
-            _, pred_label = torch.max(final_prob)
+            pred_label = torch.argmax(final_prob)
             pred_labels.append(pred_label.squeeze().item())
         # concatenate the predicted labels and return them as tensor
-        return torch.cat(pred_labels)
+        return torch.Tensor(pred_labels).type(torch.long)
 
 
     def get_specialist_opinion(self, x, candidate_label):
@@ -145,7 +145,8 @@ class TherapyFrankenCaRL(FrankenCaRL):
             if candidate_label in specialized_labels:
                 break # dirty trick: break to keep right specialist and specialized labels
         # We now have the right specialist
-        pm = nn.functional.softmax(specialist(x.unsqueeze(0)).squeeze(), dim=0)
+        activation = specialist(x.unsqueeze(0)).squeeze()[:self.num_tot_classes]
+        pm = nn.functional.softmax(activation, dim=0)
         return pm
 
 
@@ -165,7 +166,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
         for images, labels in test_dataloader:
             # print(f"Test labels: {np.unique(labels.numpy())}")
             images = images.to(self.DEVICE)
-            labels = labels.to(self.DEVICE)
+            # labels = labels.to(self.DEVICE)
 
             preds = self.classify_fc(images)
 
@@ -251,6 +252,6 @@ class TherapyFrankenCaRL(FrankenCaRL):
         if not self.all_data_means:
           self.compute_exemplars_means()
 
-        if self.use_exemplars:
-            self.test_ncm(test_dataset)
+        #if self.use_exemplars:
+        #    self.test_ncm(test_dataset)
         self.test_fc(test_dataset)
