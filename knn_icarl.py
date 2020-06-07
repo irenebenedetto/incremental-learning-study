@@ -16,7 +16,6 @@ import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 import gc
 from copy import deepcopy
-from MLDL.utils import *
 
 
 class KNNiCaRL():
@@ -24,7 +23,7 @@ class KNNiCaRL():
     Implements iCaRL as decribed in *insert paper* (the actual name of the paper is *insert paper*)
     The behavior of "distillation" flag is overridden if a custom loss is used.
     """
-    def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True):
+    def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True):
         self.exemplar_sets = []
         self.class_means = []
         self.K = K
@@ -41,9 +40,10 @@ class KNNiCaRL():
         # Internal flags to set FrankenCaRL's behavior
         self.use_exemplars = use_exemplars
         self.distillation = distillation
-        self.all_data_means = all_data_means
+        
         self.knn = KNeighborsClassifier()
         self.predict_probabilities = []
+        self.exemplar_dataset = []
 
         # Keep internal copy of the network
         self.net = deepcopy(net).to(self.DEVICE)
@@ -113,20 +113,23 @@ class KNNiCaRL():
             labels = torch.stack(labels).type(torch.long)
             torch.cuda.empty_cache
             return labels
-
+    # changing with a particular l2_loss
     def update_representation(self, train_dataset):
         """
         Update something
         Returns:
         La bici di Bibbona
         """
-
+        old_net = deepcopy(self.net)
         # Concatenate current exemplar sets with respective labels
         exemplars_dataset = []
+        # saving the old mapping for the classes already knwn
+        exemplars_fts_mapping = {}
         for label, exemplar_set in enumerate(self.exemplar_sets):
             for exemplar in exemplar_set:
                 exemplars_dataset.append((exemplar, label))
-        
+                exemplars_fts_mapping[exemplar] = old_net.feature_extractor(exemplar.to(self.DEVICE).unsqueeze(0)).cpu()
+                
         num_old_classes = len(self.exemplar_sets)
         num_new_classes = len(np.unique(train_dataset.targets))
         num_tot_classes = num_old_classes + num_new_classes
@@ -140,7 +143,6 @@ class KNNiCaRL():
     
         # If this is not the first training, we save the old network
         
-        old_net = deepcopy(self.net)
 
         optimizer = optim.SGD(self.net.parameters(), lr=self.LR, weight_decay=self.WEIGHT_DECAY, momentum=self.MOMENTUM)
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.MILESTONE, gamma=self.GAMMA)
@@ -160,7 +162,7 @@ class KNNiCaRL():
                 self.net.train()
                 optimizer.zero_grad()
 
-                loss = self.l2_loss(images, labels, old_net)
+                loss = self.l2_loss(images, labels, exemplars_fts_mapping)
                 
                 mean_loss_epoch += loss.item()
                 loss.backward()
@@ -173,7 +175,7 @@ class KNNiCaRL():
         torch.cuda.empty_cache()
         return D
 
-    def train_KNN(self, dataset):
+    def train_KNN(self, n_neighbors = 5):
         """
         The fucntion perform the training, after the network training on the KNN
         The KNN classifier training function is called AFTER the training of the network
@@ -184,9 +186,13 @@ class KNNiCaRL():
         
         """
         print('Training KNN...')
+        exemplars_dataset = []
+        for label, exemplar_set in enumerate(self.exemplar_sets):
+            for exemplar in exemplar_set:
+                exemplars_dataset.append((exemplar, label))
 
-        self.knn = KNeighborsClassifier()
-        dataloader = DataLoader(dataset, batch_size=100, shuffle=False, drop_last=False, num_workers=4)
+        self.knn = KNeighborsClassifier(n_neighbors)
+        dataloader = DataLoader(exemplars_dataset, batch_size=100, shuffle=False, drop_last=False, num_workers=4)
 
         with torch.no_grad():
             labels_list = []
@@ -199,7 +205,8 @@ class KNNiCaRL():
             all_labels = torch.cat(labels_list)
             all_fts = torch.cat(fts_list)
             self.knn.fit(all_fts, all_labels)
-            self.predict_probabilities = self.knn.predict_proba(all_fts).argmax(axis = 1)
+            #self.predict_probabilities = self.knn.predict_proba(all_fts).argmax(axis = 1)
+        self.exemplar_dataset = exemplars_dataset
             
             
 
@@ -241,7 +248,7 @@ class KNNiCaRL():
 
         
 
-    def incremental_train(self, train_dataset, test_dataset):
+    def incremental_train(self, train_dataset, test_dataset, n_neighbors):
         labels = train_dataset.targets
         new_classes = np.unique(labels)
         print(f'Arriving new classes {new_classes}')
@@ -251,14 +258,12 @@ class KNNiCaRL():
         num_new_labels = len(new_classes)
 
         t = num_old_labels + num_new_labels
-        D = self.update_representation(train_dataset)
-        self.train_KNN(D)
+        exemplars_dataset = self.update_representation(train_dataset)
+        
         m = int(self.K/t)
         
+        #self.construct_exemplar_set_KNN(D, m)
         
-        
-        self.construct_exemplar_set_KNN(D, m)
-        """
         for label in new_classes:
             bool_idx = (train_dataset.targets == label)
             idx = np.argwhere(bool_idx).flatten()
@@ -273,14 +278,15 @@ class KNNiCaRL():
 
             if self.use_exemplars:
                 # SETTED RANDOM CONSTRUCT EXEMPLAR SET
-                self.random_construct_exemplar_set(X= images_of_y, y=label, m=m)
+                self.random_construct_exemplar_set(X=images_of_y, y=label, m=m)
                 
-        """
+        self.train_KNN(n_neighbors)
         self.compute_exemplars_means()
 
         self.test_KNN(test_dataset)
         self.test_FC(test_dataset)
         self.test_NCM(test_dataset)
+    
     
     def l2_loss(self, images, labels, old_net):
         """

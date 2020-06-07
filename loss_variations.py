@@ -79,6 +79,40 @@ def l2_loss(self, images, labels, old_net, dist_loss_weight=40):
 
     return loss
 
+def l1_loss(self, images, labels, old_net, dist_loss_weight=40):
+    """
+     The function compute the l2 loss as distillation loss and a cross entropy loss for the classification task
+     Params:
+         images: to classify
+         labels
+         num_old_classes: number of old classes 
+         old_net: old network used to compute 
+    Returns:
+        the value of the total loss (distillation + classification)
+    """
+    outputs = self.net(images)[:, :self.num_tot_classes]
+    num_old_classes = len(self.exemplar_sets)
+      
+    if num_old_classes == 0:
+        cross_entropy = nn.CrossEntropyLoss()
+        loss = cross_entropy(outputs, labels)
+
+    else:
+        l1_loss = nn.L1Loss()          # l1 loss
+        CELoss = nn.CrossEntropyLoss()  # cross entropy loss
+
+        fts_old = old_net.feature_extractor(images) 
+        fts_new = self.net.feature_extractor(images)
+        
+        s = nn.Softmax(dim=1)
+        
+        class_loss = CELoss(outputs, labels)
+        dist_loss_l1 = l1_loss(fts_new, fts_old)*dist_loss_weight
+        
+        loss = class_loss + dist_loss_l1
+
+    return loss
+
 
 def less_forget_loss(self, images, labels, old_net, lambda_base=2.5, m=0.5, K=2):
     inputs = self.net.forward_cosine(images)
