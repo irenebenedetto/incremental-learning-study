@@ -45,7 +45,7 @@ def temperature_distillation_loss(self, images, labels, old_net, T=2, w_old_labe
     loss = -loss_targets*torch.log(loss_inputs)
     return loss.sum(dim=1).mean()
 
-def l2_loss(self, images, labels, old_net):
+def l2_loss(self, images, labels, old_net, dist_loss_weight=40):
     """
      The function compute the l2 loss as distillation loss and a cross entropy loss for the classification task
      Params:
@@ -73,7 +73,7 @@ def l2_loss(self, images, labels, old_net):
         s = nn.Softmax(dim=1)
         
         class_loss = CELoss(outputs, labels)
-        dist_loss_l2 = l2_loss(fts_new, fts_old)*40
+        dist_loss_l2 = l2_loss(fts_new, fts_old)*dist_loss_weight
         
         loss = class_loss + dist_loss_l2
 
