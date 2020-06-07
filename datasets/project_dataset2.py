@@ -29,7 +29,7 @@ class SubCIFAR100(Dataset):
     self.transform = transform
     # Create a dict containing map[original label] = mapped label
     mapping = {original_label: mapped_label for original_label, mapped_label in zip(labels_to_retrieve, label_mapping)}
-
+    self.reverse_mapping = {mapped_label: original_label for mapped_label, original_label in zip(label_mapping, labels_to_retrieve)}
     # Retrieve indices of desired labels
     bool_idx = np.zeros(len(self.cifar100), dtype=bool)
     images = []
