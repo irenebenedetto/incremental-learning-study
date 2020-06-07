@@ -123,12 +123,10 @@ class KNNiCaRL():
         old_net = deepcopy(self.net)
         # Concatenate current exemplar sets with respective labels
         exemplars_dataset = []
-        # saving the old mapping for the classes already knwn
-        exemplars_fts_mapping = {}
         for label, exemplar_set in enumerate(self.exemplar_sets):
             for exemplar in exemplar_set:
                 exemplars_dataset.append((exemplar, label))
-                exemplars_fts_mapping[exemplar] = old_net.feature_extractor(exemplar.to(self.DEVICE).unsqueeze(0)).cpu()
+                
                 
         num_old_classes = len(self.exemplar_sets)
         num_new_classes = len(np.unique(train_dataset.targets))
@@ -162,7 +160,7 @@ class KNNiCaRL():
                 self.net.train()
                 optimizer.zero_grad()
 
-                loss = self.l2_loss(images, labels, exemplars_fts_mapping)
+                loss = self.l2_loss(images, labels, old_net)
                 
                 mean_loss_epoch += loss.item()
                 loss.backward()
@@ -242,11 +240,7 @@ class KNNiCaRL():
         with torch.no_grad():
             indexes = torch.randperm(X.size(0))[:m]
             exemplar_set = X[indexes]
-            self.exemplar_sets.append(exemplar_set) 
-
-
-
-        
+            self.exemplar_sets.append(exemplar_set)     
 
     def incremental_train(self, train_dataset, test_dataset, n_neighbors):
         labels = train_dataset.targets
