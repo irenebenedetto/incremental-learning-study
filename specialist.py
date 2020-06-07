@@ -114,7 +114,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
             most_active_labels = torch.argsort(pg, descending=True)[:num_ask_specialists]
 
             if unique_specialist:
-                to_ask_labels = np.unique(np.floor(most_active_labels.numpy() / 10).astype(int) * 10)
+                to_ask_labels = np.unique(np.floor(most_active_labels.cpu().numpy() / 10).astype(int) * 10)
             else:
                 to_ask_labels = most_active_labels
 
