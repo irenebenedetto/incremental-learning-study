@@ -224,6 +224,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
         Returns:
             Predicted label after consulting all specialists (i.e. the final prediction)
         """
+        print("confront", end=" ")
         specialist_strongest_opinion = (-1, 0.0)
         for candidate_class in candidate_classes:
             # Find the appropriate specialist
@@ -295,6 +296,6 @@ class TherapyFrankenCaRL(FrankenCaRL):
         if not self.all_data_means:
           self.compute_exemplars_means()
 
-        #if self.use_exemplars:
-        #    self.test_ncm(test_dataset)
-        self.test_fc(test_dataset)
+        if self.use_exemplars:
+            self.test_ncm(test_dataset)
+        #self.test_fc(test_dataset)
