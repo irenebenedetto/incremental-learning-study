@@ -64,7 +64,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
         self.specialist_yellow_pages[tuple(incoming_labels)] = specialist
 
 
-    def classify(self, X, num_min_distances=3):
+    def classify(self, X, num_min_distances=3, specialist_confront=True):
       """
       Does classification, optionally by asking specialists.
 
@@ -85,7 +85,10 @@ class TherapyFrankenCaRL(FrankenCaRL):
             closest_classes = torch.argsort(distances_from_class)[:num_min_distances]
             # Clostest classes are now the candidates classes. We ask the corresponding specialists for consultation
             # Pass the unmapped x to the specialist
-            y = self.ask_specialists_hard(X[i], closest_classes)
+            if specialist_confront:
+                y = self.ask_specialists_confront(X[i], closest_classes)
+            else:
+                y = self.ask_specialists_hard(X[i], closest_classes)
             labels.append(y)
         labels = torch.stack(labels).type(torch.long)
         torch.cuda.empty_cache
@@ -210,6 +213,40 @@ class TherapyFrankenCaRL(FrankenCaRL):
         predicted_label = candidate_classes[np.argmax(probabilities)]
         # print(f"Calling specialist resulted in {predicted_label}. ", end="")
         return predicted_label
+
+    def ask_specialists_confront(self, x, candidate_classes, trust_specialists=False):
+        """
+        Given a list of candidate classes, in order, return the first label that matches the specialist prediction.
+        If none match, return ...?
+
+        Params:
+            candidate_classes: candidate labels, sorted by relevance
+        Returns:
+            Predicted label after consulting all specialists (i.e. the final prediction)
+        """
+        specialist_strongest_opinion = (-1, 0.0)
+        for candidate_class in candidate_classes:
+            # Find the appropriate specialist
+            for specialized_labels, specialist in self.specialist_yellow_pages.items():
+                if candidate_class in specialized_labels:
+                    break # dirty trick: break to keep right specialist and specialized labels
+
+            # Forward the image into the specialist and take SPECIALIST'S prediction
+            out_disto = nn.functional.softmax(specialist(x.unsqueeze(0)).squeeze(), dim=0)
+            specialist_prediction = out_disto.argmax()
+            specialist_prediction_prob = out_disto[specialist_prediction]
+            if specialist_prediction_prob > specialist_strongest_opinion[1]:
+                specialist_strongest_opinion = (specialist_prediction, specialist_prediction_prob)
+            # If specialist and general model predictions match, confirm the prediction
+            if specialist_prediction == candidate_class:
+                return candidate_class
+
+        if trust_specialists:
+            # If the loop did not find any match between general model and specialists, return the strongest opinion amongst all specialists
+            return specialist_strongest_opinion[0]
+        else:
+            # If the loop did not find any match between general model and specialist, return whatever the general model would have returned (i.e. the most relevant label)
+            return candidate_classes[0]
 
 
     def incremental_train(self, train_dataset, train_dataset_no_aug, test_dataset):
