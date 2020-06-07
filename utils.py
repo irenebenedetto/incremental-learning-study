@@ -89,32 +89,28 @@ def plot_metrics(x, y, name, xlabel, ylabel, title):
   plt.xlabel(xlabel)
   plt.grid()
   plt.show()
-    
-  
-
-#What I need -------------------------------------------------------------------------
 
 
+def scatter_images(x, colors, human_readable_label):
 
-
-
-def fashion_scatter(x, colors):
-    RS = 123
     sns.set_style('darkgrid')
     sns.set_palette('muted')
     sns.set_context("notebook", font_scale=1.5,
                     rc={"lines.linewidth": 2.5})
+    RS = 123
+
     # choose a color palette with seaborn.
     num_classes = len(np.unique(colors))
     palette = np.array(sns.color_palette("hls", num_classes))
 
     # create a scatter plot.
-    f = plt.figure(figsize=(8, 8))
+    f = plt.figure(figsize=(15, 10))
     ax = plt.subplot(aspect='equal')
     sc = ax.scatter(x[:,0], x[:,1], lw=0, s=40, c=palette[colors.astype(np.int)])
     plt.xlim(-25, 25)
     plt.ylim(-25, 25)
     plt.grid()
+
     ax.axis('off')
     ax.axis('tight')
     
@@ -127,7 +123,7 @@ def fashion_scatter(x, colors):
         # Position of each label at median of data points.
 
         xtext, ytext = np.median(x[colors == i, :], axis=0)
-        txt = ax.text(xtext, ytext, str(i), fontsize=24)
+        txt = ax.text(xtext, ytext, human_readable_label[i], fontsize=15)
         txt.set_path_effects([
             PathEffects.Stroke(linewidth=5, foreground="w"),
             PathEffects.Normal()])
@@ -136,8 +132,20 @@ def fashion_scatter(x, colors):
     return f, ax, sc, txts
 
 
-def create_tsne(net):
-    
+def create_tsne(net, human_readable_label):
+    """
+    The function plots the t-sne representation for the exemplar set  
+
+    Ex.
+        human_readable_label = cifar100.human_readable_label
+        create_tsne(icarl, human_readable_label)
+
+    Params:
+      net: the model chosen
+      human_readable_label: the names of the label assigned to each image
+    Return:
+      t-sne representation of image in 2 dimensions
+    """
     with torch.no_grad():
         for i, exemplar_set in enumerate(net.exemplar_sets):
             dim = exemplar_set.size()[0]
@@ -156,11 +164,9 @@ def create_tsne(net):
             else:
                 all_images = torch.cat((all_images, fts_exemplar), 0)
                 all_labels = np.concatenate((all_labels, np.full((dim), i)))
-                
-                
+            
+              
         #Now I Have all_images and all_labels, I can start the reduce phase
         fashion_tsne = TSNE().fit_transform(all_images.cpu().detach().numpy())
         #Plot
-        fashion_scatter(fashion_tsne, all_labels)
-
-
+        scatter_images(fashion_tsne, all_labels, human_readable_label)
