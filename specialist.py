@@ -6,6 +6,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import gc
 from MLDL.utils import *
+from MLDL.nets import ResNet18
 
 class TherapyFrankenCaRL(FrankenCaRL):
     def __init__(self, net, SpecialistModel, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True):
@@ -20,9 +21,11 @@ class TherapyFrankenCaRL(FrankenCaRL):
         Returns:
             A sound mind
         """
+        self.net.train(False)
         incoming_labels = np.unique(dataset.targets)
         print(f"Training specialist for labels {incoming_labels}...")
-        specialist = self.SpecialistModel().to(self.DEVICE)
+        # specialist = self.SpecialistModel().to(self.DEVICE)
+        specialist = ResNet18().to(self.DEVICE)
 
         # The parameters of iCaRL are used in the model, except for the number of epochs
         criterion = nn.BCEWithLogitsLoss(reduction='none')
@@ -42,12 +45,12 @@ class TherapyFrankenCaRL(FrankenCaRL):
             labels = labels.to(self.DEVICE)
 
             specialist.train()
+
             optimizer.zero_grad()
 
-            outputs = specialist(images)
-
+            outputs = specialist(images)[:, incoming_labels]
             # One hot encoding labels for binary cross-entropy loss
-            labels_onehot = nn.functional.one_hot(labels, 100).type_as(outputs)
+            labels_onehot = nn.functional.one_hot(labels, 100).type_as(outputs)[:, incoming_labels]
             loss = criterion(outputs, labels_onehot).sum(dim=1).mean()
 
             mean_loss_epoch += loss.item()
@@ -233,9 +236,10 @@ class TherapyFrankenCaRL(FrankenCaRL):
                     break # dirty trick: break to keep right specialist and specialized labels
 
             # Forward the image into the specialist and take SPECIALIST'S prediction
-            out_disto = nn.functional.softmax(specialist(x.unsqueeze(0)).squeeze(), dim=0)
-            specialist_prediction = out_disto.argmax()
-            specialist_prediction_prob = out_disto[specialist_prediction]
+            activation_specialist = specialist(x.unsqueeze(0)).squeeze()[specialized_labels]
+            out_disto = nn.functional.softmax(activation_specialist, dim=0)
+            specialist_prediction = out_disto.argmax() + specialized_labels[0] # Blondie chapeau
+            specialist_prediction_prob = out_disto[out_disto.argmax()]
             if specialist_prediction_prob > specialist_strongest_opinion[1]:
                 specialist_strongest_opinion = (specialist_prediction, specialist_prediction_prob)
             # If specialist and general model predictions match, confirm the prediction
@@ -265,18 +269,18 @@ class TherapyFrankenCaRL(FrankenCaRL):
         self.train_specialist(train_dataset)
 
         m = int(self.K/t)
-        D = self.reduce_exemplar_set(m=m)
+        self.reduce_exemplar_set(m=m)
 
         gc.collect()
 
         for label in new_classes:
-          bool_idx = (train_dataset_no_aug.targets == label)
+          bool_idx = (train_dataset.targets == label)
           idx = np.argwhere(bool_idx).flatten()
           print(f'Constructing exemplar set for label {label} (memory: {len(gc.get_objects())})')
           images_of_y = []
 
           for single_index in idx:
-            img, label = train_dataset_no_aug[single_index]
+            img, label = train_dataset[single_index]
             images_of_y.append(img)
 
           images_of_y = torch.stack(images_of_y)
