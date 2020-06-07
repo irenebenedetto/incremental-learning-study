@@ -4,6 +4,16 @@ from torchvision import transforms
 import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib import cm 
+
+from sklearn.manifold import TSNE
+import time
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as PathEffects
+
+import seaborn as sns
+
 # DISPLAY 
 def show_image_label(img, label):
   """
@@ -82,5 +92,75 @@ def plot_metrics(x, y, name, xlabel, ylabel, title):
     
   
 
+#What I need -------------------------------------------------------------------------
+
+
+
+
+
+def fashion_scatter(x, colors):
+    RS = 123
+    sns.set_style('darkgrid')
+    sns.set_palette('muted')
+    sns.set_context("notebook", font_scale=1.5,
+                    rc={"lines.linewidth": 2.5})
+    # choose a color palette with seaborn.
+    num_classes = len(np.unique(colors))
+    palette = np.array(sns.color_palette("hls", num_classes))
+
+    # create a scatter plot.
+    f = plt.figure(figsize=(8, 8))
+    ax = plt.subplot(aspect='equal')
+    sc = ax.scatter(x[:,0], x[:,1], lw=0, s=40, c=palette[colors.astype(np.int)])
+    plt.xlim(-25, 25)
+    plt.ylim(-25, 25)
+    plt.grid()
+    ax.axis('off')
+    ax.axis('tight')
+    
+
+    # add the labels for each digit corresponding to the label
+    txts = []
+
+    for i in range(num_classes):
+
+        # Position of each label at median of data points.
+
+        xtext, ytext = np.median(x[colors == i, :], axis=0)
+        txt = ax.text(xtext, ytext, str(i), fontsize=24)
+        txt.set_path_effects([
+            PathEffects.Stroke(linewidth=5, foreground="w"),
+            PathEffects.Normal()])
+        txts.append(txt)
+
+    return f, ax, sc, txts
+
+
+def create_tsne(net):
+    
+    with torch.no_grad():
+        for i, exemplar_set in enumerate(net.exemplar_sets):
+            dim = exemplar_set.size()[0]
+            fts_exemplar = []
+            if i == 0:
+                all_images = []
+            for exemplar in  exemplar_set:
+                ft_map = icarl.net.feature_extractor(exemplar.to("cuda").unsqueeze(0)).squeeze().cpu()
+                fts_exemplar.append(ft_map)
+
+            fts_exemplar = torch.stack(fts_exemplar)
+
+            if i == 0:
+                all_images = fts_exemplar
+                all_labels = np.full((dim), i)
+            else:
+                all_images = torch.cat((all_images, fts_exemplar), 0)
+                all_labels = np.concatenate((all_labels, np.full((dim), i)))
+                
+                
+        #Now I Have all_images and all_labels, I can start the reduce phase
+        fashion_tsne = TSNE().fit_transform(all_images.cpu().detach().numpy())
+        #Plot
+        fashion_scatter(fashion_tsne, all_labels)
 
 
