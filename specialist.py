@@ -94,7 +94,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
     def KL(self, P, Q):
         return (P * (P / Q).log()).sum()
 
-    def classify_fc(self, X, num_ask_specialists=3):
+    def classify_fc(self, X, num_ask_specialists=3, unique_specialist=True):
         """
         Classify using fc and asking specialists
 
@@ -112,7 +112,13 @@ class TherapyFrankenCaRL(FrankenCaRL):
             pg = nn.functional.softmax(activations, dim=0)
 
             most_active_labels = torch.argsort(pg, descending=True)[:num_ask_specialists]
-            specialist_opinions = [self.get_specialist_opinion(x, label) for label in most_active_labels] # list of prob distros
+
+            if unique_specialist:
+                to_ask_labels = np.unique(np.floor(most_active_labels.numpy() / 10).astype(int) * 10)
+            else:
+                to_ask_labels = most_active_labels
+
+            specialist_opinions = [self.get_specialist_opinion(x, label) for label in to_ask_labels] # list of prob distros
 
             # Minimize KL divergenge starting from uniform distro or something
             q = (torch.ones(pg.size()) * 1/pg.size(0)).to(self.DEVICE)
