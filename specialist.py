@@ -6,7 +6,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import gc
 from MLDL.utils import *
-from MLDL.nets import ResNet18
+from MLDL.nets.custom_resnet import ResNet18
 
 class TherapyFrankenCaRL(FrankenCaRL):
     def __init__(self, net, SpecialistModel, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True):
@@ -227,7 +227,6 @@ class TherapyFrankenCaRL(FrankenCaRL):
         Returns:
             Predicted label after consulting all specialists (i.e. the final prediction)
         """
-        print("confront", end=" ")
         specialist_strongest_opinion = (-1, 0.0)
         for candidate_class in candidate_classes:
             # Find the appropriate specialist
@@ -236,7 +235,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
                     break # dirty trick: break to keep right specialist and specialized labels
 
             # Forward the image into the specialist and take SPECIALIST'S prediction
-            activation_specialist = specialist(x.unsqueeze(0)).squeeze()[specialized_labels]
+            activation_specialist = specialist(x.unsqueeze(0)).squeeze()[list(specialized_labels)]
             out_disto = nn.functional.softmax(activation_specialist, dim=0)
             specialist_prediction = out_disto.argmax() + specialized_labels[0] # Blondie chapeau
             specialist_prediction_prob = out_disto[out_disto.argmax()]
