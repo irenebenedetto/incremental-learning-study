@@ -61,6 +61,7 @@ def show_confusion_matrix(matrix):
   fig, ax = plt.subplots(figsize=(15,9))
   ax = sns.heatmap(matrix, linewidth=0.2,cmap='Reds')
   plt.show()
+  plt.savefig(f"cm_{matrix.shape[0]}.png") #Store the pic locally
 
 def save(list_to_save, name_file):
   with open(name_file + '.txt', 'w') as outfile:
