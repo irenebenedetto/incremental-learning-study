@@ -151,3 +151,40 @@ def less_forget_loss(self, images, labels, old_net, lambda_base=2.5, m=0.5, K=2)
     # computing the total loss for the batch
     loss = (1/batch_size) * torch.sum(loss_ce + lmbd * dist_loss) + loss_mr 
     return loss
+
+
+def soft_nearest_mean_class_loss(self, images, labels, old_net, T=1):
+    """
+    Compute soft nearest mean class loss, which has been proven to have the longest name in all loss functions history.
+    This is probably the only goal we'll achieve with that.
+
+    Returns:
+        loss as a scalar for the whole batch, ready to call backward on
+    """
+    self.net.eval()
+    X = self.net.feature_extractor(images)
+
+    all_logs = []
+    for i, x in enumerate(X):
+        #for the DENOMINATOR
+        bool_idx = torch.sum(X!=x, dim=1).type(torch.bool)
+        # extracting all the images that not corrispond to x
+        all_X_except_x = X[bool_idx]
+        # computing the square distance
+        all_distances_squared = (x - all_X_except_x).pow(2).sum(dim=1)
+        denominator = torch.exp(-all_distances_squared/T).sum()
+        # for the NUMERATOR
+        # extracting all the labels of images different from x
+        all_y_except_x = labels[bool_idx]
+        # finding all images with the same label of x
+        X_same_label_as_x = all_X_except_x[all_y_except_x != labels[i]] 
+        # computing the square distance
+        all_distances_squared = (x - X_same_label_as_x).pow(2).sum(dim=1)
+        numerator = torch.exp(-all_distances_squared/T).sum()
+
+        x_contribution_to_loss = torch.log(numerator/denominator)
+        all_logs.append(x_contribution_to_loss)
+    # Sum all contributions (outer sum)
+    b = images.size(0)
+    loss = - torch.Tensor(all_logs).sum() / b
+    return loss
