@@ -1,11 +1,11 @@
-from sklearn.neighbors import KNeighborsClassifier 
+from sklearn.neighbors import KNeighborsClassifier
 import torch
-from torch.utils.data import Subset, DataLoader, TensorDataset, Dataset
+from torch.utils.data import DataLoader
 from torch.backends import cudnn
-import torch.optim as optim
+from torch import optim
 from torchvision.transforms import Compose
 from torchvision import transforms
-import torchvision.models as models
+from torchvision import models
 from PIL import Image
 from tqdm import tqdm
 import numpy as np
@@ -20,10 +20,15 @@ from copy import deepcopy
 
 class KNNiCaRL():
     """
-    Implements iCaRL as decribed in *insert paper* (the actual name of the paper is *insert paper*)
-    The behavior of "distillation" flag is overridden if a custom loss is used.
+    FrankenCaRL's evil brother, KNNiCaRL. Instead of a refined, mathematically sound NCM, uses a rougher and more barbaric KNN as classifier.
+    (it can also run a basic NCM and hybrid1 FC setup though)
+    By default, KNN is trained on the exemplars only.
+    Also by defualt, parameter K of the KNN is proportional to the size of the exemplars , and thus changes as training batches arrive.
+    Stop kNN shaming. They are beautiful too.
+
+    *** Internally has a method for random herding, but no options to activate it are currently available (god knows why) ***
     """
-    def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True):
+    def __init__(self, net, K=2000, custom_loss=None, loss_params=None, remove_duplicates=True):
         self.exemplar_sets = []
         self.class_means = []
         self.K = K
@@ -37,13 +42,8 @@ class KNNiCaRL():
         self.NUM_EPOCHS = 70
         self.DEVICE = 'cuda'
 
-        # Internal flags to set FrankenCaRL's behavior
-        self.use_exemplars = use_exemplars
-        self.distillation = distillation
-        
-        self.knn = KNeighborsClassifier()
-        self.predict_probabilities = []
         self.exemplar_dataset = []
+        self.remove_duplicates = remove_duplicates
 
         # Keep internal copy of the network
         self.net = deepcopy(net).to(self.DEVICE)
@@ -113,7 +113,8 @@ class KNNiCaRL():
             labels = torch.stack(labels).type(torch.long)
             torch.cuda.empty_cache
             return labels
-    # changing with a particular l2_loss
+
+
     def update_representation(self, train_dataset):
         """
         Update something
@@ -126,64 +127,66 @@ class KNNiCaRL():
         for label, exemplar_set in enumerate(self.exemplar_sets):
             for exemplar in exemplar_set:
                 exemplars_dataset.append((exemplar, label))
-                
-                
+
+
         num_old_classes = len(self.exemplar_sets)
         num_new_classes = len(np.unique(train_dataset.targets))
         num_tot_classes = num_old_classes + num_new_classes
         self.num_tot_classes = num_tot_classes
 
         # Create big D dataset
-        if self.use_exemplars:
-            D = MergeDataset(train_dataset, exemplars_dataset, augment2=False)
-        else:
-            D = train_dataset
-    
-        # If this is not the first training, we save the old network
-        
+        D = MergeDataset(train_dataset, exemplars_dataset, augment2=False)
+        old_net = deepcopy(self.net)
 
         optimizer = optim.SGD(self.net.parameters(), lr=self.LR, weight_decay=self.WEIGHT_DECAY, momentum=self.MOMENTUM)
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.MILESTONE, gamma=self.GAMMA)
-        
-        criterion = nn.BCEWithLogitsLoss()
+
+        criterion = nn.BCEWithLogitsLoss(reduction='none')
 
         dataloader = DataLoader(D, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4, drop_last=False)
-        
+
         for epoch in range(self.NUM_EPOCHS):
             print(f'EPOCH {epoch+1}/{self.NUM_EPOCHS}, LR = {scheduler.get_last_lr()}')
 
-            mean_loss_epoch = 0      
+            mean_loss_epoch = 0
             for images, labels in dataloader:
                 images = images.to(self.DEVICE)
                 labels = labels.to(self.DEVICE)
-                
+
                 self.net.train()
                 optimizer.zero_grad()
 
-                loss = self.l2_loss(images, labels, old_net)
-                
+                outputs = self.net(images)[:, :num_tot_classes]
+                labels_onehot = nn.functional.one_hot(labels, self.num_tot_classes).type_as(outputs)
+
+                if num_old_classes == 0:
+                    loss = criterion(outputs, labels_onehot).sum(dim=1).mean()
+                else:
+                    labels_onehot = labels_onehot.type_as(outputs)[:, num_old_classes:]
+                    out_old = torch.sigmoid(old_net(images))[:,:num_old_classes]
+                    target = torch.cat((out_old, labels_onehot), dim=1)
+                    loss = criterion(outputs, target).sum(dim=1).mean()
+
+                soft_margin_loss = self.soft_nearest_mean_class_loss(images, labels, old_net)
+
                 mean_loss_epoch += loss.item()
-                loss.backward()
+                total_loss = loss + soft_margin_loss
+                total_loss.backward()
                 optimizer.step()
                 # --- end batch
             scheduler.step()
             print(f"Mean batch loss: {mean_loss_epoch/len(dataloader):.5}")
             # --- end epoch
-            
+
         torch.cuda.empty_cache()
         return D
 
-    def train_KNN(self, n_neighbors = 5):
+    def train_KNN(self, n_neighbors=50):
         """
-        The fucntion perform the training, after the network training on the KNN
-        The KNN classifier training function is called AFTER the training of the network
-        with 
-                            self.train_KNN(dataloader)
-        Params:
-            dataset: the dataset with new class images and exemplars
-        
+        The function that performs the training, after the network training on the KNN
+        Uses exemplars as training set.
         """
-        print('Training KNN...')
+        print(f'Training KNN with {n_neighbors} neighbors (ex. set size: {len(self.exemplar_sets[0])})')
         exemplars_dataset = []
         for label, exemplar_set in enumerate(self.exemplar_sets):
             for exemplar in exemplar_set:
@@ -199,39 +202,10 @@ class KNNiCaRL():
                 fts_map = self.net.feature_extractor(images.to(self.DEVICE))
                 labels_list.append(labels)
                 fts_list.append(fts_map.cpu())
-            
+
             all_labels = torch.cat(labels_list)
             all_fts = torch.cat(fts_list)
             self.knn.fit(all_fts, all_labels)
-            #self.predict_probabilities = self.knn.predict_proba(all_fts).argmax(axis = 1)
-        self.exemplar_dataset = exemplars_dataset
-            
-            
-
-    def construct_exemplar_set_KNN(self, D, m): 
-        """
-        The function builds the exemplar set according to the lowest predict probability
-        returned by the KNN. We choose the lowest predict probability, that shound corrisponds to 
-        the hardest images to classify and we collect them into the set of exemplars.
-
-        Params:
-            D: the dataset, contains the new labels and the past exemplars stored
-            m: the number of support vectors required for each class
-        """
-        X = torch.stack([img for img, _ in D])
-        y = np.array([label for _, label in D])
-      
-        self.exemplar_sets = []
-        index_predict_probabilities = np.argsort(self.predict_probabilities) # ascending order as default
-        
-        for label in np.unique(y):
-            print(f'Creating exemplar set for label {label} with predict probabilities')
-            y_sorted = y[index_predict_probabilities]
-            idx = (y_sorted == int(label))
-            X_sorted = X[index_predict_probabilities]
-            exemplar_set = X_sorted[idx][:m]
-            print(f'\texemplar_set {exemplar_set.shape} built!')
-            self.exemplar_sets.append(exemplar_set)
 
     def random_construct_exemplar_set(self, X, y, m):
         """
@@ -240,24 +214,28 @@ class KNNiCaRL():
         with torch.no_grad():
             indexes = torch.randperm(X.size(0))[:m]
             exemplar_set = X[indexes]
-            self.exemplar_sets.append(exemplar_set)     
+            self.exemplar_sets.append(exemplar_set)
 
-    def incremental_train(self, train_dataset, test_dataset, n_neighbors):
+    def incremental_train(self, train_dataset, test_dataset, n_neighbors=3/4):
+        """
+        Params:
+          n_neighbors: if float, fraction of exemplars sets to use for K.
+            if int, value to use for K.
+        """
         labels = train_dataset.targets
         new_classes = np.unique(labels)
         print(f'Arriving new classes {new_classes}')
-        
+
         # Compute number of total labels
         num_old_labels = len(self.exemplar_sets)
         num_new_labels = len(new_classes)
 
         t = num_old_labels + num_new_labels
-        exemplars_dataset = self.update_representation(train_dataset)
-        
+        D = self.update_representation(train_dataset)
+
         m = int(self.K/t)
-        
-        #self.construct_exemplar_set_KNN(D, m)
-        
+        self.reduce_exemplar_set(m=m)
+
         for label in new_classes:
             bool_idx = (train_dataset.targets == label)
             idx = np.argwhere(bool_idx).flatten()
@@ -269,52 +247,73 @@ class KNNiCaRL():
                 images_of_y.append(img)
 
             images_of_y = torch.stack(images_of_y)
+            self.construct_exemplar_set(X=images_of_y, y=label, m=m)
 
-            if self.use_exemplars:
-                # SETTED RANDOM CONSTRUCT EXEMPLAR SET
-                self.random_construct_exemplar_set(X=images_of_y, y=label, m=m)
-                
-        self.train_KNN(n_neighbors)
+        if isinstance(n_neighbors, int):
+          internal_n_neighbors = n_neighbors
+        else:
+          internal_n_neighbors = int(m * n_neighbors)
+
+        self.train_KNN(internal_n_neighbors)
         self.compute_exemplars_means()
 
         self.test_KNN(test_dataset)
         self.test_FC(test_dataset)
         self.test_NCM(test_dataset)
-    
-    
-    def l2_loss(self, images, labels, old_net):
-        """
-        The function compute the l2 loss as distillation loss and a cross entropy loss for the classification task
-        Params:
-            images: to classify
-            labels
-            num_old_classes: number of old classes 
-            old_net: old network used to compute 
-        Returns:
-            the value of the total loss (distillation + classification)
-        """
-        outputs = self.net(images)[:, :self.num_tot_classes]
-        num_old_classes = len(self.exemplar_sets)
-      
-        if num_old_classes == 0:
-            cross_entropy = nn.CrossEntropyLoss()
-            loss = cross_entropy(outputs, labels)
 
-        else:
-            l2_loss = nn.MSELoss()          # l2 loss for distillation
-            CELoss = nn.CrossEntropyLoss()  # cross entropy loss for classification
+    def reduce_exemplar_set(self, m):
+      """
+      The function reduces the number of images for each exampler set at m
+      Params:
+        m: number of elements that has to be collected
+      Return:
+        the list of exemplar_sets updated
+      """
+      for i, exemplar_set in enumerate(self.exemplar_sets):
+        self.exemplar_sets[i] = exemplar_set[:m]
+      return self.exemplar_sets
 
-            fts_old = old_net.feature_extractor(images) 
-            fts_new = self.net.feature_extractor(images)
-            
-            s = nn.Softmax(dim=1)
-            
-            class_loss = CELoss(outputs, labels)
-            dist_loss_l2 = l2_loss(fts_new, fts_old)*60
-            
-            loss = class_loss + dist_loss_l2
 
-        return loss
+    def construct_exemplar_set(self, X, y, m):
+      """
+      X only contains elements of a single label y
+      """
+      with torch.no_grad():
+        self.net.eval()
+
+        # Compute class mean of X
+        loader = DataLoader(X,batch_size=self.BATCH_SIZE, shuffle=True, drop_last=False, num_workers = 4)
+        phi_X = []
+        for images in loader:
+          images = images.to(self.DEVICE)
+          phi_X_batch = self.net.feature_extractor(images)
+          phi_X.append(phi_X_batch)
+          del images
+
+        phi_X = torch.cat(phi_X).to('cpu')
+        mu_y = phi_X.mean(dim=0)
+
+        Py = []
+        size_mapped_images = phi_X[0].size()[0]
+        # Accumulates sum of exemplars
+        sum_taken_exemplars = torch.zeros(1, phi_X.size()[1])
+
+        for k in range(1, int(m+1)):
+          # Using broadcast: expanding mu_y and sum_taken_exemplars to phi_X shape
+          mean_distances = (mu_y - (1/k)*(phi_X + sum_taken_exemplars)).norm(dim=1)
+          min_index = mean_distances.argmin(dim=0).item()
+          p = X[min_index]
+          Py.append(p)
+          p = p.unsqueeze(0)
+          phi_p = self.net.feature_extractor(p.to(self.DEVICE))
+          sum_taken_exemplars = sum_taken_exemplars + phi_p.to('cpu')
+          if self.remove_duplicates:
+            X = torch.cat((X[:min_index], X[min_index+1:]), dim = 0)
+            phi_X = torch.cat((phi_X[:min_index], phi_X[min_index+1:]), dim = 0)
+          del phi_p
+
+        Py = torch.stack(Py)
+        self.exemplar_sets.append(Py) # for dictionary version: self.exemplar_sets[y] = Py
 
     def test_NCM(self, test_dataset):
         self.net.eval()
@@ -328,14 +327,14 @@ class KNNiCaRL():
                 # print(f"Test labels: {np.unique(labels.numpy())}")
                 images = images.to(self.DEVICE)
                 labels = labels.to(self.DEVICE)
-                
+
                 # Get prediction with  NMC
                 preds = self.classify_NCM(images).to(self.DEVICE)
 
                 # Update Corrects
                 running_corrects += torch.sum(preds == labels.data).data.item()
                 update_confusion_matrix(matrix, preds, labels)
-        
+
             # Calculate Accuracy and mean loss
             accuracy = running_corrects / len(test_dataloader.dataset)
             self.accuracies_NCM.append(accuracy)
@@ -354,15 +353,15 @@ class KNNiCaRL():
                 # print(f"Test labels: {np.unique(labels.numpy())}")
                 images = images.to(self.DEVICE)
                 labels = labels.to(self.DEVICE)
-                
+
                 outputs = self.net(images)[:, :self.num_tot_classes]
                 _, preds = torch.max(nn.Softmax(outputs).dim, 1)
-                
+
                 update_confusion_matrix(matrix, preds, labels)
 
                 # Update Corrects
                 running_corrects += torch.sum(preds == labels.data).data.item()
-                
+
             # Calculate Accuracy and mean loss
             accuracy = running_corrects / len(test_dataloader.dataset)
             self.accuracies_FC.append(accuracy)
@@ -382,14 +381,49 @@ class KNNiCaRL():
                 images = images.to(self.DEVICE)
                 fts_map = self.net.feature_extractor(images)
                 preds = self.knn.predict(fts_map.cpu())
-                
+
                 update_confusion_matrix(matrix, torch.Tensor(preds).type_as(labels), labels)
 
                 # Update Corrects
                 running_corrects += torch.sum(torch.Tensor(preds) == labels.data).data.item()
-      
+
             # Calculate Accuracy and mean loss
             accuracy = running_corrects / len(test_dataloader.dataset)
             self.accuracies_KNN.append(accuracy)
             print(f'\033[94mAccuracy on test set with KNN:{accuracy}\x1b[0m')
             show_confusion_matrix(matrix)
+
+    def soft_nearest_mean_class_loss(self, images, labels, old_net, T=2):
+        """
+        Compute soft nearest mean class loss, which has been proven to have the longest name in all loss functions history.
+        This is probably the only goal we'll achieve with that.
+        Returns:
+            loss as a scalar for the whole batch, ready to call backward on
+        """
+        self.net.eval()
+        X = self.net.feature_extractor(images)
+
+        all_logs = []
+        for i, x in enumerate(X):
+            #for the DENOMINATOR
+            bool_idx = torch.sum(X!=x, dim=1).type(torch.bool)
+            # extracting all the images that not corrispond to x
+            all_X_except_x = X[bool_idx]
+            # computing the square distance
+            all_distances_squared = (x - all_X_except_x).pow(2).sum(dim=1)
+            denominator = torch.exp(-all_distances_squared/T).sum()
+            # for the NUMERATOR
+            # extracting all the labels of images different from x
+            all_y_except_x = labels[bool_idx]
+            # finding all images with the same label of x
+            X_same_label_as_x = all_X_except_x[all_y_except_x != labels[i]]
+            # computing the square distance
+            all_distances_squared = (x - X_same_label_as_x).pow(2).sum(dim=1)
+            numerator = torch.exp(-all_distances_squared/T).sum()
+
+            x_contribution_to_loss = torch.log(numerator/denominator)
+            all_logs.append(x_contribution_to_loss)
+        # Sum all contributions (outer sum)
+        b = images.size(0)
+        loss = - torch.Tensor(all_logs).sum() / b
+        return loss
