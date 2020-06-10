@@ -17,6 +17,7 @@ import gc
 from copy import deepcopy
 from MLDL.utils import *
 from MLDL.datasets.project_dataset1 import MergeDataset
+from MLDL.loss_variations import soft_nearest_mean_class_loss
 
 class FrankenCaRL():
   """
@@ -24,7 +25,7 @@ class FrankenCaRL():
 
   The behavior of "distillation" flag is overridden if a custom loss is used.
   """
-  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, remove_duplicates=True):
+  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, remove_duplicates=True, soft_nm=True):
     self.exemplar_sets = []
     self.class_means = []
     self.K = K
@@ -43,6 +44,7 @@ class FrankenCaRL():
     self.distillation = distillation
     self.all_data_means = all_data_means
     self.remove_duplicates = remove_duplicates
+    self.soft_nm = soft_nm
 
     # Keep internal copy of the network
     self.net = deepcopy(net).to(self.DEVICE)
@@ -202,6 +204,9 @@ class FrankenCaRL():
                 loss = criterion(outputs, target).sum(dim=1).mean()
         else:
             loss = self.custom_loss(self, images, labels, old_net, **self.loss_params)
+
+        if self.soft_nm:
+            loss = loss + soft_nearest_mean_class_loss(self, images, labels, old_net, T=2)
 
         mean_loss_epoch += loss.item()
         loss.backward()
