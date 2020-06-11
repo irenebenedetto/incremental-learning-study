@@ -100,6 +100,16 @@ def generate_new_image(self, label, n, X):
 
 
 def generate_exemplar_max_activation(self, label, n_new_images, X):
+    """
+     The function generates new exemplars training on a random images and maximizing 
+     the activation of the neuron that correspons to the label 
+     Params:
+        - label: the class label of the new images to generate
+        - n_new_images: the number of new exemplars to generare
+        - X: not used, only to match with the other functions
+     Returns:
+        the new images set for the label
+    """
     new_images = []
     n_iter=200
 
