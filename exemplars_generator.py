@@ -1,4 +1,18 @@
 from MLDL.nets.eg_resnet import EG_Resnet
+import torch
+from torch.utils.data import Subset, DataLoader
+import torch.nn as nn
+from torch.backends import cudnn
+import torch.optim as optim
+from torchvision.transforms import Compose
+from torchvision import transforms
+import torchvision.models as models
+from PIL import Image
+from tqdm import tqdm
+import numpy as np
+from matplotlib import pyplot as plt
+import random
+import os
 
 def generate_images_with_network(self, label, n, X):
     """
