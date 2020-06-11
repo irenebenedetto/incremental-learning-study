@@ -14,6 +14,25 @@ from matplotlib import pyplot as plt
 import random
 import os
 from copy import deepcopy
+from imblearn.over_sampling import SMOTE
+
+
+
+def generate_exemplars_smote(self, labels, X):
+    """
+      The function rebalances the dataset with SMOTE tecnique
+      
+      - X: is the dataset unmbalanced (should be exemplarsets + new train set)
+      - labels: the corrisponding label
+      
+    """
+    X = X.view(X.size(0), 3*32*32)
+    oversample = SMOTE()
+    
+    new_X, new_labels = oversample.fit_resample(X, labels)
+    
+    new_X = torch.Tensor(new_X).view([new_X.shape[0], 3, 32, 32])
+    return (new_X, new_labels)
 
 def generate_images_with_network(self, label, n_new_images, X):
     """

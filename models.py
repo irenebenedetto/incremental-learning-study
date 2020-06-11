@@ -57,7 +57,7 @@ class FrankenCaRL():
         self.exemplars_generator = generate_new_image
     elif exemplars_generator is 'smote':
         self.exemplars_generator = 'smote' 
-    elif exemplars_dataset is 'network':
+    elif exemplars_generator is 'network':
         self.exemplars_generator = generate_images_with_network
     else:
         self.exemplars_generator = 'none' 
