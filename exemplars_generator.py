@@ -15,7 +15,7 @@ import random
 import os
 from copy import deepcopy
 
-def generate_images_with_network(self, label, n, X):
+def generate_images_with_network(self, label, n_new_images, X):
     """
     The function try to generate new images from a set of existing one, by 
     using a network with 3*32*32 output neurons
@@ -24,7 +24,7 @@ def generate_images_with_network(self, label, n, X):
     - X: set of images to replicate, they belong to the same class label
     - n: number of images to generate
     """
-    print(f'generating +{n} new images of label {label}')
+    print(f'generating +{n_new_images} new images of label {label}')
     net = EG_Resnet()
     net = net.cuda()
     l1_loss = nn.L1Loss()
@@ -68,7 +68,7 @@ def generate_images_with_network(self, label, n, X):
     # generating a new set of  n images initialized randomly
       
     with torch.no_grad():
-        ds_new_random_images = torch.randn(size=(n, X.size()[1], X.size()[2], X.size()[3]))
+        ds_new_random_images = torch.randn(size=(n_new_images, X.size()[1], X.size()[2], X.size()[3]))
         new_images = []
         net.eval()
 
@@ -82,16 +82,16 @@ def generate_images_with_network(self, label, n, X):
 
         new_images = torch.stack(new_images, dim=0)
 
-        return new_images, net
+        return new_images
 
 
-def generate_new_image(self, label, n, X):
-    print(f'generating +{n} images for label {label}')
+def generate_new_image(self, label, n_new_images, X):
+    print(f'generating +{n_new_images} new images of label {label}')
     mean_of_X = X.mean(dim=0)
     std_of_X = X.std(dim=0)
     new_images = []
       
-    for i in range(n):
+    for i in range(n_new_images):
         factor = np.random.random()*np.random.randint(-1, 2) 
         new_image = mean_of_X + factor*std_of_X
         new_images.append(new_image)
@@ -112,8 +112,7 @@ def generate_exemplar_max_activation(self, label, n_new_images, X):
     """
     new_images = []
     n_iter=200
-
-    print(f'labl {label}')
+    print(f'generating +{n_new_images} new images of label {label}')
     self.net.eval()
     copy_net = deepcopy(self.net)
 
@@ -122,7 +121,7 @@ def generate_exemplar_max_activation(self, label, n_new_images, X):
         random_img = torch.randn(size = ([1, 3, 32, 32])).cuda()
         random_img.requires_grad = True
         # optimizing the random image with sgd
-        optimizer = optim.SGD([random_img], lr=0.2, weight_decay=5e-5, momentum=0)
+        optimizer = optim.SGD([random_img], lr=0.2+np.random.rand()*0.3, weight_decay=5e-5, momentum=0)
 
         for i in range(n_iter):
             optimizer.zero_grad()
@@ -133,7 +132,8 @@ def generate_exemplar_max_activation(self, label, n_new_images, X):
             loss.backward()
             optimizer.step()
 
-        if i in [90, 130, 199]:
+        if i >= 50 and i%5 == 0:
+            
             new_images.append(deepcopy(random_img.squeeze().data))
 
     new_images = torch.stack(new_images)
