@@ -71,7 +71,7 @@ def generate_images_with_network(self, label, n, X):
 
 
 
-def generate_new_image(self, X, n, label):
+def generate_new_image(self, label, n, X):
     print(f'generating +{n} images for label {label}')
     mean_of_X = X.mean(dim=0)
     std_of_X = X.std(dim=0)
