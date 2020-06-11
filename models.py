@@ -18,6 +18,7 @@ from copy import deepcopy
 from MLDL.utils import *
 from MLDL.datasets.project_dataset1 import MergeDataset
 from MLDL.loss_variations import soft_nearest_mean_class_loss
+from MLDL.exemplars_generator import generate_exemplars_smote, generate_images_with_network, generate_new_image, generate_exemplar_max_activation
 
 class FrankenCaRL():
   """
@@ -25,7 +26,7 @@ class FrankenCaRL():
 
   The behavior of "distillation" flag is overridden if a custom loss is used.
   """
-  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, remove_duplicates=True, soft_nm=False, exemplars_generator=None):
+  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, remove_duplicates=True, soft_nm=False, exemplars_generator='none'):
     self.exemplar_sets = []
     self.class_means = []
     self.K = K
@@ -36,7 +37,7 @@ class FrankenCaRL():
     self.MILESTONE = [48, 62]
     self.WEIGHT_DECAY = 1e-5
     self.GAMMA = 0.2
-    self.NUM_EPOCHS = 70
+    self.NUM_EPOCHS = 3
     self.DEVICE = 'cuda'
 
     # Internal flags to set FrankenCaRL's behavior
@@ -50,7 +51,16 @@ class FrankenCaRL():
     self.net = deepcopy(net).to(self.DEVICE)
 
     # set the generator of exemplars
-    self.exemplars_generator = exemplars_generator
+    if exemplars_generator is 'max_act':
+        self.exemplars_generator = generate_exemplar_max_activation
+    elif exemplars_generator is 'mean':
+        self.exemplars_generator = generate_new_image
+    elif exemplars_generator is 'smote':
+        self.exemplars_generator = 'smote' 
+    elif exemplars_dataset is 'network':
+        self.exemplars_generator = generate_images_with_network
+    else:
+        self.exemplars_generator = 'none' 
 
     # Other internal parameters
     self.num_tot_classes = 0
@@ -155,13 +165,20 @@ class FrankenCaRL():
       for exemplar in exemplar_set:
         exemplars_dataset.append((exemplar, label))
 
-      if self.exemplars_generator is not None:
+      if self.exemplars_generator is not 'none' and self.exemplars_generator is not 'smote':
         X = exemplar_set[:100]
-        new_images = self.exemplars_generator(self, label, 200, X)
+        new_images = self.exemplars_generator(self, label, 500 - exemplar_set.size(0) , X)
         
         for new_image in new_images:
           exemplars_dataset.append((new_image, label))
 
+    if self.exemplars_generator is 'smote' and len(self.exemplar_sets) >0:
+      X = [img for img, _ in exemplars_dataset]
+      labels = [lb for _, lb in exemplars_dataset]
+      X = torch.stack(X)
+      labels = torch.stack(labels)
+      new_X, new_labels = generate_exemplars_smote(self, labels, 100, X)
+      exemplars_dataset = [(new_x, new_lb) for (new_x, new_lb) in zip(new_X, new_labels)]
 
     num_new_classes = len(np.unique(train_dataset.targets))
     #if use_exemplars:
