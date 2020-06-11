@@ -132,9 +132,8 @@ def generate_exemplar_max_activation(self, label, n_new_images, X):
             loss.backward()
             optimizer.step()
 
-        if i >= 50 and i%5 == 0:
-            
-            new_images.append(deepcopy(random_img.squeeze().data))
+            if i >= 50 and i%5 == 0:
+                new_images.append(deepcopy(random_img.squeeze().data))
 
     new_images = torch.stack(new_images)
     return new_images[:n_new_images]    
