@@ -25,7 +25,7 @@ class FrankenCaRL():
 
   The behavior of "distillation" flag is overridden if a custom loss is used.
   """
-  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, remove_duplicates=True, soft_nm=True):
+  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, remove_duplicates=True, soft_nm=False):
     self.exemplar_sets = []
     self.class_means = []
     self.K = K
