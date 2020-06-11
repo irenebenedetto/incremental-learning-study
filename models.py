@@ -157,7 +157,7 @@ class FrankenCaRL():
 
       if self.exemplars_generator is not None:
         X = exemplar_set[:100]
-        new_images, net = self.exemplars_generator(self, label, 200, X)
+        new_images = self.exemplars_generator(self, label, 200, X)
         del net
         for new_image in new_images:
           exemplars_dataset.append((new_image, label))
