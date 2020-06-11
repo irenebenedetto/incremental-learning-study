@@ -155,9 +155,9 @@ class FrankenCaRL():
       for exemplar in exemplar_set:
         exemplars_dataset.append((exemplar, label))
 
-      if exemplars_generator is not None:
+      if self.exemplars_generator is not None:
         X = exemplar_set[:100]
-        new_images, net = self.generate_images_with_network(label=label, n=200, X=X)
+        new_images, net = self.exemplars_generator(self, label=label, n=200, X=X)
         del net
         for new_image in new_images:
           exemplars_dataset.append((new_image, label))
