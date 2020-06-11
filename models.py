@@ -25,7 +25,7 @@ class FrankenCaRL():
 
   The behavior of "distillation" flag is overridden if a custom loss is used.
   """
-  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, remove_duplicates=True, soft_nm=False):
+  def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, remove_duplicates=True, soft_nm=False, exemplars_generator=None):
     self.exemplar_sets = []
     self.class_means = []
     self.K = K
@@ -48,6 +48,9 @@ class FrankenCaRL():
 
     # Keep internal copy of the network
     self.net = deepcopy(net).to(self.DEVICE)
+
+    # set the generator of exemplars
+    self.exemplars_generator = exemplars_generator
 
     # Other internal parameters
     self.num_tot_classes = 0
@@ -151,6 +154,13 @@ class FrankenCaRL():
     for label, exemplar_set in enumerate(self.exemplar_sets):
       for exemplar in exemplar_set:
         exemplars_dataset.append((exemplar, label))
+
+      if exemplars_generator is not None:
+        X = exemplar_set[:100]
+        new_images, net = self.generate_images_with_network(label=label, n=200, X=X)
+        del net
+        for new_image in new_images:
+          exemplars_dataset.append((new_image, label))
 
 
     num_new_classes = len(np.unique(train_dataset.targets))
