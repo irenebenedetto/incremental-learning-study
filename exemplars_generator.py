@@ -107,7 +107,7 @@ def generate_exemplar_max_activation(self, label, n_new_images, X):
     self.net.eval()
     copy_net = deepcopy(self.net)
 
-  # starting iteration to generate the new image
+    # starting iteration to generate the new image
     while len(new_images) < n_new_images:
         random_img = torch.randn(size = ([1, 3, 32, 32])).cuda()
         random_img.requires_grad = True
