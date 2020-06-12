@@ -172,7 +172,7 @@ class FrankenCaRL():
         for new_image in new_images:
           exemplars_dataset.append((new_image, label))
 
-    if self.exemplars_generator is 'smote' and len(self.exemplar_sets) >0:
+    if self.exemplars_generator is 'smote' and len(self.exemplar_sets) > 0:
       X = [img for img, _ in exemplars_dataset]
       labels = [lb for _, lb in exemplars_dataset]
       X = torch.stack(X)
@@ -193,6 +193,15 @@ class FrankenCaRL():
       D = MergeDataset(train_dataset, exemplars_dataset, augment2=False)
     else:
       D = train_dataset
+
+    if self.exemplars_generator is 'smote' and len(self.exemplar_sets) >0:
+      # converting into tensor
+      X = torch.stack([img for (img, lb) in D])
+      labels = torch.Tensor([lb for (img, lb) in D])
+      # generating new exemplar with SMOTE
+      new_X, new_labels = generate_exemplars_smote(self, labels, X)
+      # appending to the new dataset
+      D = [(new_x, new_lb) for (new_x, new_lb) in zip(new_X, new_labels)]
 
     # Save the old network for distillation
     old_net = deepcopy(self.net)

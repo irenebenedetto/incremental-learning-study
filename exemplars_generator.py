@@ -26,12 +26,15 @@ def generate_exemplars_smote(self, labels, X):
       - labels: the corrisponding label
       
     """
+    # images should be converted into vectors
     X = X.view(X.size(0), 3*32*32)
     oversample = SMOTE()
-    
+    # oversample
     new_X, new_labels = oversample.fit_resample(X, labels)
-    
+    # back to images 3, 32, 32 size
     new_X = torch.Tensor(new_X).view([new_X.shape[0], 3, 32, 32])
+    new_labels = torch.Tensor(new_labels).type(torch.long)
+    print(f'balancing class {np.unique(new_labels.numpy())}\n')
     return (new_X, new_labels)
 
 def generate_images_with_network(self, label, n_new_images, X):
