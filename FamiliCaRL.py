@@ -21,7 +21,7 @@ import random
 import pandas as pd
 import os
 
-class familiCaRL():
+class FamiliCaRL():
   """
   Support gay marriage. More equity, less discrimination.
   """
@@ -58,7 +58,7 @@ class familiCaRL():
       self.clf_loss = clf_loss
     else:
       self.clf_loss = nn.BCEWithLogitsLoss(reduction='none')
-    
+
     if dist_loss is not None:
       self.dist_loss = dist_loss
     else:
@@ -68,7 +68,7 @@ class familiCaRL():
       self.clf_params = {}
     else:
       self.clf_params = clf_params
-    
+
     if dist_params is None:
       self.dist_params = {}
     else:
@@ -87,7 +87,7 @@ class familiCaRL():
         mu_y = phi_Py.mean(dim = 0)
         mu_y.data = mu_y.data / mu_y.data.norm()
         self.class_means.append(mu_y)
-  
+
   def compute_class_means_with_training(self, X):
     """
       Compute class means with data passed as argument
@@ -126,7 +126,7 @@ class familiCaRL():
       labels = torch.stack(labels).type(torch.long)
       torch.cuda.empty_cache
       return labels
-  
+
   def reduce_exemplar_set(self, m):
     """
     The function reduces the number of images for each exampler set at m
@@ -146,7 +146,7 @@ class familiCaRL():
       with torch.no_grad():
           indexes = torch.randperm(X.size(0))[:m]
           exemplar_set = X[indexes]
-          self.exemplar_sets.append(exemplar_set) 
+          self.exemplar_sets.append(exemplar_set)
 
   def construct_exemplar_set(self, X, y, m):
     """
@@ -254,13 +254,13 @@ class familiCaRL():
         new_parent = ResNet18()
     else:
         new_parent = deepcopy(self.old_parent)
-        
-    
+
+
     new_parent = new_parent.to(self.DEVICE)
 
     optimizer = optim.SGD(new_parent.parameters(), lr=self.LR, weight_decay=self.WEIGHT_DECAY, momentum=self.MOMENTUM)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.MILESTONE, gamma=self.GAMMA)
-    
+
     dataloader = DataLoader(train_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4, drop_last=False)
 
     for epoch in range(self.NUM_EPOCHS):
@@ -278,10 +278,10 @@ class familiCaRL():
         # Leave the output complete and cut it afterwards
         outputs_new_classes = new_parent(images)[:, num_old_classes:self.num_tot_classes] # non dovrebbe essere --> num_old_classes:self.num_tot_classes
         labels_onehot = nn.functional.one_hot(labels, self.num_tot_classes).type_as(outputs_new_classes)[:, num_old_classes:] # non dovrebbe essere --> num_old_classes:self.num_tot_classes
-    
+
         classification_loss = self.clf_loss(outputs_new_classes, labels_onehot).sum(dim=1)
         mean_loss_epoch += classification_loss.data.mean()
-        # add regularization 
+        # add regularization
         if num_old_classes >= 10:
             fts_new_parent = new_parent.feature_extractor(images)
             fts_old_parent = self.old_parent.feature_extractor(images)
@@ -292,7 +292,7 @@ class familiCaRL():
         else:
             loss = classification_loss.mean()
 
-        
+
         loss.backward()
         optimizer.step()
         # -- end batch
@@ -329,7 +329,7 @@ class familiCaRL():
 
       images_of_y = torch.stack(images_of_y)
       self.random_construct_exemplar_set(X=images_of_y, y=label, m=m)
-    
+
     # We now have a new parent and all exemplars. If this is the first batch, we are done
     if num_old_classes == 0:
       self.old_parent = deepcopy(new_parent)
@@ -341,7 +341,7 @@ class familiCaRL():
           exemplars_dataset.append((exemplar, label))
       child = self.distill_parents(self.old_parent, new_parent, exemplars_dataset)
       self.old_parent = deepcopy(child)
-    
+
 
     if not self.all_data_means:
       self.compute_exemplars_means()
@@ -367,20 +367,20 @@ class familiCaRL():
     Return child
     """
     print(f"Distilling parents into child (lulwut?)")
-    
+
     num_old_classes = self.num_tot_classes - self.num_new_classes
     old_parent.eval()
-    new_parent.eval() 
+    new_parent.eval()
     child_model = deepcopy(new_parent)
-    
+
     child_model = child_model.to(self.DEVICE)
     child_model.train(True)
-    
+
     for param in old_parent.parameters():
         param.requires_grad = False
     for param in new_parent.parameters():
         param.requires_grad = False
-    
+
 
     optimizer = optim.SGD(child_model.parameters(), lr=0.9, weight_decay=self.WEIGHT_DECAY, momentum=self.MOMENTUM)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30, 50,70, 90], gamma=0.3)
@@ -400,10 +400,10 @@ class familiCaRL():
         optimizer.zero_grad()
 
         # Take outputs of old parent
-        out_old_parent = old_parent(images)[:, :num_old_classes] 
+        out_old_parent = old_parent(images)[:, :num_old_classes]
         q_old = nn.functional.sigmoid(out_old_parent)
         # Take outputs of new parent
-        out_new_parent = new_parent(images)[:, num_old_classes:self.num_tot_classes] 
+        out_new_parent = new_parent(images)[:, num_old_classes:self.num_tot_classes]
         q_new = nn.functional.sigmoid(out_new_parent)
 
         target = torch.cat((q_old, q_new), dim=1)
@@ -414,8 +414,8 @@ class familiCaRL():
         # Add a further classification step
         labels_onehot = nn.functional.one_hot(labels, self.num_tot_classes).type_as(out_child)
         clf_loss_contribution = self.clf_loss(out_child, labels_onehot).sum(dim=1)
-        
-        
+
+
         loss = dist_loss_contribution.mean() #+ clf_loss_contribution).mean()
 
         mean_loss_epoch_clf += clf_loss_contribution.data.mean().item()
