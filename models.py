@@ -223,8 +223,11 @@ class FrankenCaRL():
 
         self.net.train()
         optimizer.zero_grad()
-
-        outputs = self.net(images)[:, :num_tot_classes]
+        # option for cosine resnet
+        if self.distillation.__name__ == 'less_forget_loss':
+          outputs = self.net.forward_cosine(images)[:, :num_tot_classes]
+        else:
+          outputs = self.net(images)[:, :num_tot_classes]
 
         # One hot encoding labels for binary cross-entropy loss
         labels_onehot = nn.functional.one_hot(labels, self.num_tot_classes).type_as(outputs)
@@ -400,7 +403,10 @@ class FrankenCaRL():
       images = images.to(self.DEVICE)
       labels = labels.to(self.DEVICE)
 
-      outputs = self.net(images)[:,:self.num_tot_classes]
+      if self.distillation.__name__ == 'less_forget_loss':
+        outputs = self.net.forward_cosine(images)[:,:self.num_tot_classes]
+      else:
+        outputs = self.net(images)[:,:self.num_tot_classes]
       _, preds = torch.max(outputs.data, 1)
 
       update_confusion_matrix(matrix, preds, labels)
