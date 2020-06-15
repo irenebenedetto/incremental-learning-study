@@ -1,4 +1,23 @@
 from sklearn.svm import SVC
+from copy import deepcopy
+import torch
+from torch.utils.data import Subset, DataLoader, TensorDataset, Dataset
+from torch.backends import cudnn
+import torch.optim as optim
+from torchvision.transforms import Compose
+from torchvision import transforms
+import torchvision.models as models
+from PIL import Image
+from tqdm import tqdm
+import numpy as np
+import random
+import pandas as pd
+import os
+import torch.nn as nn
+import torch.utils.model_zoo as model_zoo
+import gc
+from copy import deepcopy
+from MLDL.utils import *
 
 class SVMiCaRL():
     """
@@ -265,7 +284,7 @@ class SVMiCaRL():
 
 
 
-    def incremental_train(self, train_dataset, train_dataset_no_aug, test_dataset):
+    def incremental_train(self, train_dataset, test_dataset):
         labels = train_dataset.targets
         new_classes = np.unique(labels)
         print(f'Arriving new classes {new_classes}')
