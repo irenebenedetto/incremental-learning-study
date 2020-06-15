@@ -302,7 +302,7 @@ class FamiliCaRL():
       # -- end epoch
     return new_parent
 
-  def incremental_train(self, train_dataset, test_datset):
+  def incremental_train(self, train_dataset, test_dataset):
     labels = train_dataset.targets
     new_classes = np.unique(labels)
     print(f'Arriving new classes {new_classes}')
