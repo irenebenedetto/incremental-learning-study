@@ -224,7 +224,7 @@ class FrankenCaRL():
         self.net.train()
         optimizer.zero_grad()
         # option for cosine resnet
-        if self.distillation.__name__ == 'less_forget_loss':
+        if self.custom_loss.__name__ == 'less_forget_loss':
           outputs = self.net.forward_cosine(images)[:, :num_tot_classes]
         else:
           outputs = self.net(images)[:, :num_tot_classes]
@@ -403,7 +403,7 @@ class FrankenCaRL():
       images = images.to(self.DEVICE)
       labels = labels.to(self.DEVICE)
 
-      if self.distillation.__name__ == 'less_forget_loss':
+      if self.custom_loss.__name__ == 'less_forget_loss':
         outputs = self.net.forward_cosine(images)[:,:self.num_tot_classes]
       else:
         outputs = self.net(images)[:,:self.num_tot_classes]
