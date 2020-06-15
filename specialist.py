@@ -253,7 +253,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
             return candidate_classes[0]
 
 
-    def incremental_train(self, train_dataset, train_dataset_no_aug, test_dataset):
+    def incremental_train(self, train_dataset, test_dataset):
         labels = train_dataset.targets
         new_classes = np.unique(labels)
         print(f'Arriving new classes {new_classes}')
