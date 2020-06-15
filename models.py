@@ -172,14 +172,6 @@ class FrankenCaRL():
         for new_image in new_images:
           exemplars_dataset.append((new_image, label))
 
-    if self.exemplars_generator is 'smote' and len(self.exemplar_sets) > 0:
-      X = [img for img, _ in exemplars_dataset]
-      labels = [lb for _, lb in exemplars_dataset]
-      X = torch.stack(X)
-      labels = torch.stack(labels)
-      new_X, new_labels = generate_exemplars_smote(self, labels, 100, X)
-      exemplars_dataset = [(new_x, new_lb) for (new_x, new_lb) in zip(new_X, new_labels)]
-
     num_new_classes = len(np.unique(train_dataset.targets))
     #if use_exemplars:
     #  num_old_classes = len(self.exemplar_sets)

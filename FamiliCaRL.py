@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import Subset, DataLoader
 import torch.nn as nn
 from torch.backends import cudnn
-
+from MLDL.nets.custom_resnet import ResNet18
 import torch.optim as optim
 from torchvision.datasets import CIFAR100
 from torchvision.transforms import Compose
