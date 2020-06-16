@@ -14,7 +14,14 @@ class TherapyFrankenCaRL(FrankenCaRL):
         super().__init__(net, K=K, custom_loss=custom_loss, loss_params=loss_params, use_exemplars=use_exemplars, distillation=distillation, all_data_means=all_data_means)
         self.specialist_yellow_pages = dict()
         self.clone_specialist = clone_specialist
-
+        self.accuracies = {
+            'accuracy_nmc': [],
+            'accuracy_fc': [],
+            'accuracy_nmc_old': [],
+            'accuracy_nmc_new': [],
+            'accuracy_fc_old': [],
+            'accuracy_fc_new': []
+        }
 
     def train_specialist(self, dataset):
         """
@@ -168,7 +175,7 @@ class TherapyFrankenCaRL(FrankenCaRL):
         return pm
 
 
-    def test_fc(self, test_dataset):
+    def test_fc(self, test_dataset,num_old_classes):
         """
         Overrides FrankenCaRL's default test_fc method by using specialist classify.
         Computes accuracy over entire test set and prints it onscreen.
@@ -178,6 +185,8 @@ class TherapyFrankenCaRL(FrankenCaRL):
 
         test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=False, num_workers=4)
         running_corrects = 0
+        old_corrects = 0
+        n_old = 0
         t = self.num_tot_classes
         matrix = new_confusion_matrix(lenx=t, leny=t)
 
@@ -185,18 +194,27 @@ class TherapyFrankenCaRL(FrankenCaRL):
             # print(f"Test labels: {np.unique(labels.numpy())}")
             images = images.to(self.DEVICE)
             # labels = labels.to(self.DEVICE)
-
+            old_idx = (labels.cpu().numpy() < num_old_classes)
             preds = self.classify_fc(images)
 
             update_confusion_matrix(matrix, preds, labels)
 
             # Update Corrects
             running_corrects += torch.sum(preds == labels.data).data.item()
-
+            old_corrects += torch.sum(preds[old_idx] == labels[old_idx].data).data.item()
+            n_old += np.sum(old_idx)
         # Calculate Accuracy and mean loss
         accuracy = running_corrects / len(test_dataloader.dataset)
-        self.accuracies_fc.append(accuracy)
-        print(f'\033[94mAccuracy on test set with fc :{accuracy}\x1b[0m')
+        old_accuracy = old_corrects / n_old
+        new_corrects = running_corrects - old_corrects
+        new_accuracy = new_corrects / (len(test_dataloader.dataset) - n_old)
+        self.accuracies['accuracy_fc'].append(accuracy)
+        self.accuracies['accuracy_fc_old'].append(old_accuracy)
+        self.accuracies['accuracy_fc_new'].append(new_accuracy)
+        print(f'\033[94mAccuracy on test set with FC :{accuracy}\x1b[0m')
+        print(f'\033[94mOld accuracy on test set with FC :{old_accuracy}\x1b[0m')
+        print(f'\033[94mNew accuracy on test set with FC :{new_accuracy}\x1b[0m')
+        
         show_confusion_matrix(matrix)
 
 
@@ -306,5 +324,5 @@ class TherapyFrankenCaRL(FrankenCaRL):
           self.compute_exemplars_means()
 
         if self.use_exemplars:
-            self.test_ncm(test_dataset)
-        self.test_fc(test_dataset)
+            self.test_ncm(test_dataset,num_old_labels)
+        self.test_fc(test_dataset, num_old_labels)
