@@ -5,14 +5,15 @@ from torch import nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import gc
+from copy import deepcopy
 from MLDL.utils import *
 from MLDL.nets.custom_resnet import ResNet18
 
 class TherapyFrankenCaRL(FrankenCaRL):
-    def __init__(self, net, SpecialistModel, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True):
+    def __init__(self, net, K=2000, custom_loss=None, loss_params=None, use_exemplars=True, distillation=True, all_data_means=True, clone_specialist=True):
         super().__init__(net, K=K, custom_loss=custom_loss, loss_params=loss_params, use_exemplars=use_exemplars, distillation=distillation, all_data_means=all_data_means)
-        self.SpecialistModel = SpecialistModel
         self.specialist_yellow_pages = dict()
+        self.clone_specialist = clone_specialist
 
 
     def train_specialist(self, dataset):
@@ -24,8 +25,13 @@ class TherapyFrankenCaRL(FrankenCaRL):
         self.net.train(False)
         incoming_labels = np.unique(dataset.targets)
         print(f"Training specialist for labels {incoming_labels}...")
-        # specialist = self.SpecialistModel().to(self.DEVICE)
-        specialist = ResNet18().to(self.DEVICE)
+
+        if self.clone_specialist:
+            print("Cloning specialist from main model...")
+            specialist = deepcopy(self.net)
+        else:
+            print("Generating new specialist from scratch...")
+            specialist = ResNet18().to(self.DEVICE)
 
         # The parameters of iCaRL are used in the model, except for the number of epochs
         criterion = nn.BCEWithLogitsLoss(reduction='none')
@@ -301,4 +307,4 @@ class TherapyFrankenCaRL(FrankenCaRL):
 
         if self.use_exemplars:
             self.test_ncm(test_dataset)
-        #self.test_fc(test_dataset)
+        self.test_fc(test_dataset)
