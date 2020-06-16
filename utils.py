@@ -67,7 +67,7 @@ def save(list_to_save, name_file):
   with open(name_file + '.txt', 'w') as outfile:
     outfile.write(str(list_to_save) + '\n')
   
-def plot_metrics(x, y, name, xlabel, ylabel, title):
+def plot_metrics(x, y, stds, name, xlabel, ylabel, title):
   """
     The function plots the metrics.
 
@@ -80,8 +80,8 @@ def plot_metrics(x, y, name, xlabel, ylabel, title):
   
   color = cm.coolwarm(np.linspace(0,1,len(y)))
   plt.figure(figsize=(15, 10))
-  for yi, namei, c in zip(y, name, color):
-    plt.plot(x, yi, marker='o', color=c, markersize=10, linewidth=4, label = namei)
+  for yi, std, namei, c in zip(y,stds,  name, color):
+    plt.errorbar(x=x, y=yi,yerr=std, marker='o', color=c, markersize=10, linewidth=4, label = namei)
 
   plt.legend()
   plt.title(title, loc='center', fontsize=16, fontweight=0, color='black')
