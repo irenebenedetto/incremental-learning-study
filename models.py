@@ -56,16 +56,23 @@ class FrankenCaRL():
     elif exemplars_generator is 'mean':
         self.exemplars_generator = generate_new_image
     elif exemplars_generator is 'smote':
-        self.exemplars_generator = 'smote' 
+        self.exemplars_generator = 'smote'
     elif exemplars_generator is 'network':
         self.exemplars_generator = generate_images_with_network
     else:
-        self.exemplars_generator = 'none' 
+        self.exemplars_generator = 'none'
 
     # Other internal parameters
     self.num_tot_classes = 0
-    self.accuracies_nmc = []
-    self.accuracies_fc = []
+    self.accuracies = {
+        'accuracy_nmc': [],
+        'accuracy_fc': [],
+        'accuracy_nmc_old': [],
+        'accuracy_nmc_new': [],
+        'accuracy_fc_old': [],
+        'accuracy_fc_new': []
+    }
+
     # Set loss to use
     self.custom_loss = custom_loss
 
@@ -168,7 +175,7 @@ class FrankenCaRL():
       if self.exemplars_generator is not 'none' and self.exemplars_generator is not 'smote':
         X = exemplar_set[:100]
         new_images = self.exemplars_generator(self, label, 500 - exemplar_set.size(0) , X)
-        
+
         for new_image in new_images:
           exemplars_dataset.append((new_image, label))
 
@@ -296,8 +303,8 @@ class FrankenCaRL():
       self.compute_exemplars_means()
 
     if self.use_exemplars:
-        self.test_ncm(test_dataset)
-    self.test_fc(test_dataset)
+        self.test_ncm(test_dataset, num_old_labels)
+    self.test_fc(test_dataset, num_old_labels)
 
 
   def reduce_exemplar_set(self, m):
@@ -357,10 +364,12 @@ class FrankenCaRL():
       self.exemplar_sets.append(Py) # for dictionary version: self.exemplar_sets[y] = Py
 
 
-  def test_ncm(self, test_dataset):
+  def test_ncm(self, test_dataset, num_old_classes):
     self.net.eval()
     test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
     running_corrects = 0
+    old_corrects = 0
+    n_old = 0
     t = self.num_tot_classes
     matrix = new_confusion_matrix(lenx=t, leny=t)
     tot_loss = 0
@@ -368,25 +377,39 @@ class FrankenCaRL():
       # print(f"Test labels: {np.unique(labels.numpy())}")
       images = images.to(self.DEVICE)
       labels = labels.to(self.DEVICE)
+
+      old_idx = (labels.cpu().numpy() < num_old_classes)
 
       # Get prediction with  NMC
       preds = self.classify(images).to(self.DEVICE)
 
       # Update Corrects
+      old_corrects += torch.sum(preds[old_idx] == labels[old_idx].data).data.item()
+      n_old += np.sum(old_idx)
       running_corrects += torch.sum(preds == labels.data).data.item()
       update_confusion_matrix(matrix, preds, labels)
 
     # Calculate Accuracy and mean loss
     accuracy = running_corrects / len(test_dataloader.dataset)
-    self.accuracies_nmc.append(accuracy)
+    old_accuracy = old_corrects / n_old
+    new_corrects = running_corrects - old_corrects
+    new_accuracy = new_corrects / (len(test_dataloader.dataset) - n_old)
+
+    self.accuracies['accuracy_nmc'].append(accuracy)
+    self.accuracies['accuracy_nmc_old'].append(old_accuracy)
+    self.accuracies['accuracy_nmc_new'].append(new_accuracy)
     print(f'\033[94mAccuracy on test set with NMC :{accuracy}\x1b[0m')
+    print(f'\033[94mOld accuracy on test set with NMC :{old_accuracy}\x1b[0m')
+    print(f'\033[94mNew accuracy on test set with NMC :{new_accuracy}\x1b[0m')
     show_confusion_matrix(matrix)
 
-  def test_fc(self, test_dataset):
+  def test_fc(self, test_dataset, num_old_classes):
     self.net.eval()
 
     test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
     running_corrects = 0
+    old_corrects = 0
+    n_old = 0
     t = self.num_tot_classes
     matrix = new_confusion_matrix(lenx=t, leny=t)
     tot_loss = 0
@@ -394,6 +417,8 @@ class FrankenCaRL():
       # print(f"Test labels: {np.unique(labels.numpy())}")
       images = images.to(self.DEVICE)
       labels = labels.to(self.DEVICE)
+
+      old_idx = (labels.cpu().numpy() < num_old_classes)
 
       if self.custom_loss is not None and self.custom_loss.__name__ == 'less_forget_loss':
         outputs = self.net.forward_cosine(images)[:,:self.num_tot_classes]
@@ -401,13 +426,23 @@ class FrankenCaRL():
         outputs = self.net(images)[:,:self.num_tot_classes]
       _, preds = torch.max(outputs.data, 1)
 
+
+
       update_confusion_matrix(matrix, preds, labels)
 
       # Update Corrects
       running_corrects += torch.sum(preds == labels.data).data.item()
-
+      old_corrects += torch.sum(preds[old_idx] == labels[old_idx].data).data.item()
+      n_old += np.sum(old_idx)
     # Calculate Accuracy and mean loss
     accuracy = running_corrects / len(test_dataloader.dataset)
-    self.accuracies_fc.append(accuracy)
-    print(f'\033[94mAccuracy on test set with fc :{accuracy}\x1b[0m')
+    old_accuracy = old_corrects / n_old
+    new_corrects = running_corrects - old_corrects
+    new_accuracy = new_corrects / (len(test_dataloader.dataset) - n_old)
+    self.accuracies['accuracy_fc'].append(accuracy)
+    self.accuracies['accuracy_fc_old'].append(old_accuracy)
+    self.accuracies['accuracy_fc_new'].append(new_accuracy)
+    print(f'\033[94mAccuracy on test set with FC :{accuracy}\x1b[0m')
+    print(f'\033[94mOld accuracy on test set with FC :{old_accuracy}\x1b[0m')
+    print(f'\033[94mNew accuracy on test set with FC :{new_accuracy}\x1b[0m')
     show_confusion_matrix(matrix)
