@@ -35,7 +35,7 @@ class SVMiCaRL():
         self.MILESTONE = [48, 62]
         self.WEIGHT_DECAY = 1e-5
         self.GAMMA = 0.2
-        self.NUM_EPOCHS = 1
+        self.NUM_EPOCHS = 70
         self.DEVICE = 'cuda'
 
         # Internal flags to set FrankenCaRL's behavior
