@@ -134,7 +134,7 @@ def scatter_images(x, colors, human_readable_label):
     return f, ax, sc, txts
 
 
-def create_tsne(net, human_readable_label):
+def create_tsne(icarl, human_readable_label):
     """
     The function plots the t-sne representation for the exemplar set  
 
@@ -149,7 +149,7 @@ def create_tsne(net, human_readable_label):
       t-sne representation of image in 2 dimensions
     """
     with torch.no_grad():
-        for i, exemplar_set in enumerate(net.exemplar_sets):
+        for i, exemplar_set in enumerate(icarl.exemplar_sets):
             dim = exemplar_set.size()[0]
             fts_exemplar = []
             if i == 0:
