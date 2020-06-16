@@ -35,7 +35,7 @@ class SVMiCaRL():
         self.MILESTONE = [48, 62]
         self.WEIGHT_DECAY = 1e-5
         self.GAMMA = 0.2
-        self.NUM_EPOCHS = 70
+        self.NUM_EPOCHS = 1
         self.DEVICE = 'cuda'
 
         # Internal flags to set FrankenCaRL's behavior
@@ -56,7 +56,7 @@ class SVMiCaRL():
             'accuracy_nmc_old': [],
             'accuracy_nmc_new': [],
             'accuracy_fc_old': [],
-            'accuracy_fc_new': []
+            'accuracy_fc_new': [],
             'accuracy_svm_old': [],
             'accuracy_svm_new': []
         }
@@ -318,7 +318,7 @@ class SVMiCaRL():
         self.test_fc(test_dataset, num_old_labels)
         self.test_nmc(test_dataset, num_old_labels)
 
-    def test_ncm(self, test_dataset, num_old_classes):
+    def test_nmc(self, test_dataset, num_old_classes):
         self.net.eval()
         test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
         running_corrects = 0
@@ -333,7 +333,7 @@ class SVMiCaRL():
             labels = labels.to(self.DEVICE)
             old_idx = (labels.cpu().numpy() < num_old_classes)
             # Get prediction with  NMC
-            preds = self.classify(images).to(self.DEVICE)
+            preds = self.classify_NCM(images).to(self.DEVICE)
             # Update Corrects
             old_corrects += torch.sum(preds[old_idx] == labels[old_idx].data).data.item()
             n_old += np.sum(old_idx)
@@ -413,8 +413,8 @@ class SVMiCaRL():
                 update_confusion_matrix(matrix, torch.Tensor(preds).type_as(labels), labels)
 
                 # Update Corrects
-                running_corrects += torch.sum(preds == labels.data).data.item()
-                old_corrects += torch.sum(preds[old_idx] == labels[old_idx].data).data.item()
+                running_corrects += torch.sum(torch.Tensor(preds) == labels.data).data.item()
+                old_corrects += torch.sum(torch.Tensor(preds)[old_idx] == labels[old_idx].data).data.item()
                 n_old += np.sum(old_idx)
 
             # Calculate Accuracy and mean loss
