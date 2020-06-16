@@ -124,8 +124,8 @@ def scatter_images(x, colors, human_readable_label):
 
         # Position of each label at median of data points.
 
-        xtext, ytext = np.median(x[colors == i, :], axis=0)
-        txt = ax.text(xtext, ytext, human_readable_label[i], fontsize=15)
+        xtext, ytext = np.median(x[colors == i, :], axis=0) + 1
+        txt = ax.text(xtext, ytext, human_readable_label[i], fontsize=12)
         txt.set_path_effects([
             PathEffects.Stroke(linewidth=5, foreground="w"),
             PathEffects.Normal()])
