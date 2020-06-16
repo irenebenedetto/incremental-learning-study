@@ -52,9 +52,17 @@ class KNNiCaRL():
 
         # Other internal parameters
         self.num_tot_classes = 0
-        self.accuracies_NCM = []
-        self.accuracies_FC = []
-        self.accuracies_KNN = []
+        self.accuracies = {
+        'accuracy_nmc': [],
+        'accuracy_fc': [],
+        'accuracy_knn': [],
+        'accuracy_nmc_old': [],
+        'accuracy_nmc_new': [],
+        'accuracy_fc_old': [],
+        'accuracy_fc_new': [],
+        'accuracy_knn_old': [],
+        'accuracy_knn_new': []
+    }
         # Set loss to use
         self.custom_loss = custom_loss
 
@@ -259,9 +267,9 @@ class KNNiCaRL():
         self.train_KNN(internal_n_neighbors)
         self.compute_exemplars_means()
 
-        self.test_KNN(test_dataset)
-        self.test_FC(test_dataset)
-        self.test_NCM(test_dataset)
+        self.test_knn(test_dataset, num_old_labels)
+        self.test_fc(test_dataset, num_old_labels)
+        self.test_nmc(test_dataset, num_old_labels)
 
     def reduce_exemplar_set(self, m):
       """
@@ -317,64 +325,92 @@ class KNNiCaRL():
         Py = torch.stack(Py)
         self.exemplar_sets.append(Py) # for dictionary version: self.exemplar_sets[y] = Py
 
-    def test_NCM(self, test_dataset):
+    
+
+    def test_ncm(self, test_dataset, num_old_classes):
         self.net.eval()
-        with torch.no_grad():
-            test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
-            running_corrects = 0
-            t = self.num_tot_classes
-            matrix = new_confusion_matrix(lenx=t, leny=t)
-            tot_loss = 0
-            for images, labels in test_dataloader:
-                # print(f"Test labels: {np.unique(labels.numpy())}")
-                images = images.to(self.DEVICE)
-                labels = labels.to(self.DEVICE)
+        test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
+        running_corrects = 0
+        old_corrects = 0
+        n_old = 0
+        t = self.num_tot_classes
+        matrix = new_confusion_matrix(lenx=t, leny=t)
+        tot_loss = 0
+        for images, labels in test_dataloader:
+            # print(f"Test labels: {np.unique(labels.numpy())}")
+            images = images.to(self.DEVICE)
+            labels = labels.to(self.DEVICE)
+            old_idx = (labels.cpu().numpy() < num_old_classes)
+            # Get prediction with  NMC
+            preds = self.classify(images).to(self.DEVICE)
+            # Update Corrects
+            old_corrects += torch.sum(preds[old_idx] == labels[old_idx].data).data.item()
+            n_old += np.sum(old_idx)
+            running_corrects += torch.sum(preds == labels.data).data.item()
+            update_confusion_matrix(matrix, preds, labels)
 
-                # Get prediction with  NMC
-                preds = self.classify_NCM(images).to(self.DEVICE)
+        # Calculate Accuracy and mean loss
+        accuracy = running_corrects / len(test_dataloader.dataset)
+        old_accuracy = old_corrects / n_old
+        new_corrects = running_corrects - old_corrects
+        new_accuracy = new_corrects / (len(test_dataloader.dataset) - n_old)
 
-                # Update Corrects
-                running_corrects += torch.sum(preds == labels.data).data.item()
-                update_confusion_matrix(matrix, preds, labels)
+        self.accuracies['accuracy_nmc'].append(accuracy)
+        self.accuracies['accuracy_nmc_old'].append(old_accuracy)
+        self.accuracies['accuracy_nmc_new'].append(new_accuracy)
+        print(f'\033[94mAccuracy on test set with NMC :{accuracy}\x1b[0m')
+        print(f'\033[94mOld accuracy on test set with NMC :{old_accuracy}\x1b[0m')
+        print(f'\033[94mNew accuracy on test set with NMC :{new_accuracy}\x1b[0m')
+        show_confusion_matrix(matrix)
 
-            # Calculate Accuracy and mean loss
-            accuracy = running_corrects / len(test_dataloader.dataset)
-            self.accuracies_NCM.append(accuracy)
-            print(f'\033[94mAccuracy on test set with NMC :{accuracy}\x1b[0m')
-            show_confusion_matrix(matrix)
-
-    def test_FC(self, test_dataset):
+    def test_fc(self, test_dataset, num_old_classes):
         self.net.eval()
-        with torch.no_grad():
-            test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
-            running_corrects = 0
-            t = self.num_tot_classes
-            matrix = new_confusion_matrix(lenx=t, leny=t)
-            tot_loss = 0
-            for images, labels in test_dataloader:
-                # print(f"Test labels: {np.unique(labels.numpy())}")
-                images = images.to(self.DEVICE)
-                labels = labels.to(self.DEVICE)
+        test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
+        running_corrects = 0
+        old_corrects = 0
+        n_old = 0
+        t = self.num_tot_classes
+        matrix = new_confusion_matrix(lenx=t, leny=t)
+        tot_loss = 0
+        for images, labels in test_dataloader:
+            # print(f"Test labels: {np.unique(labels.numpy())}")
+            images = images.to(self.DEVICE)
+            labels = labels.to(self.DEVICE)
+            old_idx = (labels.cpu().numpy() < num_old_classes)
 
-                outputs = self.net(images)[:, :self.num_tot_classes]
-                _, preds = torch.max(nn.Softmax(outputs).dim, 1)
+            if self.custom_loss is not None and self.custom_loss.__name__ == 'less_forget_loss':
+                outputs = self.net.forward_cosine(images)[:,:self.num_tot_classes]
+            else:
+                outputs = self.net(images)[:,:self.num_tot_classes]
+            _, preds = torch.max(outputs.data, 1)
 
-                update_confusion_matrix(matrix, preds, labels)
+            update_confusion_matrix(matrix, preds, labels)
 
-                # Update Corrects
-                running_corrects += torch.sum(preds == labels.data).data.item()
+            # Update Corrects
+            running_corrects += torch.sum(preds == labels.data).data.item()
+            old_corrects += torch.sum(preds[old_idx] == labels[old_idx].data).data.item()
+            n_old += np.sum(old_idx)
+        # Calculate Accuracy and mean loss
+        accuracy = running_corrects / len(test_dataloader.dataset)
+        old_accuracy = old_corrects / n_old
+        new_corrects = running_corrects - old_corrects
+        new_accuracy = new_corrects / (len(test_dataloader.dataset) - n_old)
+        self.accuracies['accuracy_fc'].append(accuracy)
+        self.accuracies['accuracy_fc_old'].append(old_accuracy)
+        self.accuracies['accuracy_fc_new'].append(new_accuracy)
+        print(f'\033[94mAccuracy on test set with FC :{accuracy}\x1b[0m')
+        print(f'\033[94mOld accuracy on test set with FC :{old_accuracy}\x1b[0m')
+        print(f'\033[94mNew accuracy on test set with FC :{new_accuracy}\x1b[0m')
+        show_confusion_matrix(matrix)
 
-            # Calculate Accuracy and mean loss
-            accuracy = running_corrects / len(test_dataloader.dataset)
-            self.accuracies_FC.append(accuracy)
-            print(f'\033[94mAccuracy on test set with fc :{accuracy}\x1b[0m')
-            show_confusion_matrix(matrix)
 
-    def test_KNN(self, test_dataset):
+    def test_knn(self, test_dataset, num_old_classes):
         self.net.eval()
         with torch.no_grad():
             test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4, drop_last=False)
             running_corrects = 0
+            old_corrects = 0
+            n_old = 0
             t = self.num_tot_classes
             matrix = new_confusion_matrix(lenx=t, leny=t)
             tot_loss = 0
@@ -383,16 +419,25 @@ class KNNiCaRL():
                 images = images.to(self.DEVICE)
                 fts_map = self.net.feature_extractor(images)
                 preds = self.knn.predict(fts_map.cpu())
-
+                old_idx = (labels.cpu().numpy() < num_old_classes)
                 update_confusion_matrix(matrix, torch.Tensor(preds).type_as(labels), labels)
 
                 # Update Corrects
-                running_corrects += torch.sum(torch.Tensor(preds) == labels.data).data.item()
+                running_corrects += torch.sum(preds == labels.data).data.item()
+                old_corrects += torch.sum(preds[old_idx] == labels[old_idx].data).data.item()
+                n_old += np.sum(old_idx)
 
             # Calculate Accuracy and mean loss
             accuracy = running_corrects / len(test_dataloader.dataset)
-            self.accuracies_KNN.append(accuracy)
-            print(f'\033[94mAccuracy on test set with KNN:{accuracy}\x1b[0m')
+            old_accuracy = old_corrects / n_old
+            new_corrects = running_corrects - old_corrects
+            new_accuracy = new_corrects / (len(test_dataloader.dataset) - n_old)
+            self.accuracies['accuracy_fc'].append(accuracy)
+            self.accuracies['accuracy_fc_old'].append(old_accuracy)
+            self.accuracies['accuracy_fc_new'].append(new_accuracy)
+            print(f'\033[94mAccuracy on test set with FC :{accuracy}\x1b[0m')
+            print(f'\033[94mOld accuracy on test set with FC :{old_accuracy}\x1b[0m')
+            print(f'\033[94mNew accuracy on test set with FC :{new_accuracy}\x1b[0m')
             show_confusion_matrix(matrix)
 
     def soft_nearest_mean_class_loss(self, images, labels, old_net, T=2):
