@@ -36,7 +36,7 @@ class FamiliCaRL():
     self.MILESTONE = [48, 62]
     self.WEIGHT_DECAY = 1e-5
     self.GAMMA = 0.2
-    self.NUM_EPOCHS = 70
+    self.NUM_EPOCHS = 1
 
     self.DEVICE = 'cuda'
 
@@ -195,7 +195,7 @@ class FamiliCaRL():
       self.exemplar_sets.append(Py)
 
   def test_ncm(self, test_dataset, num_old_classes):
-    self.net.eval()
+    self.old_parent.eval()
     test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
     running_corrects = 0
     old_corrects = 0
@@ -209,7 +209,7 @@ class FamiliCaRL():
       labels = labels.to(self.DEVICE)
       old_idx = (labels.cpu().numpy() < num_old_classes)
       # Get prediction with  NMC
-      preds = self.classify(images).to(self.DEVICE)
+      preds = self.classify_NMC(images).to(self.DEVICE)
       # Update Corrects
       old_corrects += torch.sum(preds[old_idx] == labels[old_idx].data).data.item()
       n_old += np.sum(old_idx)
@@ -231,7 +231,7 @@ class FamiliCaRL():
     show_confusion_matrix(matrix)
 
   def test_fc(self, test_dataset, num_old_classes):
-    self.net.eval()
+    self.old_parent.eval()
     test_dataloader = DataLoader(test_dataset, batch_size=self.BATCH_SIZE, shuffle=True, num_workers=4)
     running_corrects = 0
     old_corrects = 0
@@ -245,10 +245,7 @@ class FamiliCaRL():
       labels = labels.to(self.DEVICE)
       old_idx = (labels.cpu().numpy() < num_old_classes)
 
-      if self.custom_loss is not None and self.custom_loss.__name__ == 'less_forget_loss':
-        outputs = self.net.forward_cosine(images)[:,:self.num_tot_classes]
-      else:
-        outputs = self.net(images)[:,:self.num_tot_classes]
+      outputs = self.old_parent(images)[:,:self.num_tot_classes]
       _, preds = torch.max(outputs.data, 1)
 
       update_confusion_matrix(matrix, preds, labels)
