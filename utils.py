@@ -92,6 +92,19 @@ def plot_metrics(x, y, stds, name, xlabel, ylabel, title):
   plt.grid()
   plt.show()
 
+def plot_weights(weights, step):
+    norm_weights = weights.norm(dim=0)
+    x = np.array([x_i for x_i in range(1, (step+1)*10 +1)])
+    my_color=np.where(x<=(step+1)*10 -10, 'skyblue', 'orange')
+
+    plt.figure(figsize=(15, 7))
+    plt.vlines(x,ymin = 0, ymax = norm_weights, color=my_color, alpha=0.9)
+    plt.title('Norm of weights in fully connected layer')
+    plt.xticks([x_i for x_i in range(0,(i+1)*10+1 , 10)])
+    plt.xlabel('number of classes')
+    plt.ylabel('Weights norm ')
+    plt.savefig(f'weights_step{step}')
+    plt.show()
 
 def scatter_images(x, colors, human_readable_label):
 
