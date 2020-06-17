@@ -149,6 +149,7 @@ def create_tsne(icarl, human_readable_label):
       t-sne representation of image in 2 dimensions
     """
     with torch.no_grad():
+        icarl.net.eval()
         for i, exemplar_set in enumerate(icarl.exemplar_sets):
             dim = exemplar_set.size()[0]
             fts_exemplar = []
