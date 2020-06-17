@@ -100,7 +100,7 @@ def plot_weights(weights, step):
     plt.figure(figsize=(15, 7))
     plt.vlines(x,ymin = 0, ymax = norm_weights, color=my_color, alpha=0.9)
     plt.title('Norm of weights in fully connected layer')
-    plt.xticks([x_i for x_i in range(0,(i+1)*10+1 , 10)])
+    plt.xticks([x_i for x_i in range(0,(step+1)*10+1 , 10)])
     plt.xlabel('number of classes')
     plt.ylabel('Weights norm ')
     plt.savefig(f'weights_step{step}')
