@@ -432,12 +432,12 @@ class KNNiCaRL():
             old_accuracy = old_corrects / n_old
             new_corrects = running_corrects - old_corrects
             new_accuracy = new_corrects / (len(test_dataloader.dataset) - n_old)
-            self.accuracies['accuracy_fc'].append(accuracy)
-            self.accuracies['accuracy_fc_old'].append(old_accuracy)
-            self.accuracies['accuracy_fc_new'].append(new_accuracy)
-            print(f'\033[94mAccuracy on test set with FC :{accuracy}\x1b[0m')
-            print(f'\033[94mOld accuracy on test set with FC :{old_accuracy}\x1b[0m')
-            print(f'\033[94mNew accuracy on test set with FC :{new_accuracy}\x1b[0m')
+            self.accuracies['accuracy_knn'].append(accuracy)
+            self.accuracies['accuracy_knn_old'].append(old_accuracy)
+            self.accuracies['accuracy_knn_new'].append(new_accuracy)
+            print(f'\033[94mAccuracy on test set with KNN :{accuracy}\x1b[0m')
+            print(f'\033[94mOld accuracy on test set with KNN :{old_accuracy}\x1b[0m')
+            print(f'\033[94mNew accuracy on test set with KNN :{new_accuracy}\x1b[0m')
             show_confusion_matrix(matrix)
 
     def soft_nearest_mean_class_loss(self, images, labels, old_net, T=2):
