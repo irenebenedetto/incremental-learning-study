@@ -3,7 +3,7 @@ import numpy as np
 from torchvision import transforms
 import seaborn as sns
 from matplotlib import pyplot as plt
-from matplotlib import cm 
+from matplotlib import cm
 import torch
 from sklearn.manifold import TSNE
 import time
@@ -11,10 +11,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as PathEffects
-
+import pickle
 import seaborn as sns
 
-# DISPLAY 
+# DISPLAY
 def show_image_label(img, label):
   """
   Print an image (taken in tensor form) and its human readable label.
@@ -47,12 +47,12 @@ def update_heat_matrix(data, preds, num_batch, normalization):
       data[preds,num_batch] = data[preds,num_batch]+1
     else:
       data[preds,num_batch] = data[preds,num_batch]+1/(num_batch)
-        
+
 #CONFUSION MATRIX
 def update_confusion_matrix(matrix, preds, datas):
   for pred, data in zip(preds,datas):
     matrix[data.item(),pred.item()] = matrix[data.item(),pred.item()]+1
-        
+
 def new_confusion_matrix(lenx=100, leny=100):
   matrix = np.zeros((leny, lenx))
   return matrix
@@ -62,12 +62,12 @@ def show_confusion_matrix(matrix):
   ax = sns.heatmap(matrix, linewidth=0.2,cmap='Reds')
   plt.savefig(f"cm_{matrix.shape[0]}.png") #Store the pic locally
   plt.show()
-  
+
 
 def save(list_to_save, name_file):
   with open(name_file + '.txt', 'w') as outfile:
     outfile.write(str(list_to_save) + '\n')
-  
+
 def plot_metrics(x, y, stds, name, xlabel, ylabel, title):
   """
     The function plots the metrics.
@@ -78,7 +78,7 @@ def plot_metrics(x, y, stds, name, xlabel, ylabel, title):
       - name: legend label for each y_i plotted
       - label: name of the y axis
   """
-  
+
   color = cm.coolwarm(np.linspace(0,1,len(y)))
   plt.figure(figsize=(15, 10))
   for yi, std, namei, c in zip(y,stds,  name, color):
@@ -123,7 +123,7 @@ def silhouette_exemplars(icarl):
         icarl.net.eval()
         fts_exemplar = []
         labels = []
-		
+
         for i, exemplar_set in enumerate(icarl.exemplar_sets):
             dim_exemplar_set = exemplar_set.size()[0]
             for exemplar in  exemplar_set:
@@ -164,7 +164,7 @@ def scatter_images(x, colors, human_readable_label):
 
     ax.axis('off')
     ax.axis('tight')
-    
+
 
     # add the labels for each digit corresponding to the label
     txts = []
@@ -185,7 +185,7 @@ def scatter_images(x, colors, human_readable_label):
 
 def create_tsne(icarl, human_readable_label):
     """
-    The function plots the t-sne representation for the exemplar set  
+    The function plots the t-sne representation for the exemplar set
 
     Ex.
         human_readable_label = cifar100.human_readable_label
@@ -216,9 +216,35 @@ def create_tsne(icarl, human_readable_label):
             else:
                 all_images = torch.cat((all_images, fts_exemplar), 0)
                 all_labels = np.concatenate((all_labels, np.full((dim), i)))
-            
-              
+
+
         #Now I Have all_images and all_labels, I can start the reduce phase
         fashion_tsne = TSNE().fit_transform(all_images.cpu().detach().numpy())
         #Plot
         scatter_images(fashion_tsne, all_labels, human_readable_label)
+
+def dump_model(model, filename):
+    """
+    Saves in the filesystem a binary dump of the model given.
+    The dump can be restored later (hopefully).
+
+    Params:
+        model: the model, whole (e.g. instance of FrankenCaRL)
+        filename: file name as a string (no extension needed)
+    """
+    with open(filename, 'wb') as picklefile:
+        pickle.dump(model, picklefile)
+
+def load_model_from_pickle(filePath):
+    """
+    Load and return a previously pickled model.
+
+    Params:
+        filePath: path of the binary file (result of a pickling operation)
+
+    Returns:
+        instance of the reconstrcted model (e.g. instance of FrankenCaRL)
+    """
+    with open(filePath, 'rb') as inputfile:
+        outModel = pickle.load(inputfile)
+    return outModel
