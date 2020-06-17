@@ -106,6 +106,42 @@ def plot_weights(weights, step):
     plt.savefig(f'weights_step{step}')
     plt.show()
 
+from sklearn.metrics import silhouette_score
+
+def silhouette_exemplars(icarl):
+    """
+    Computes the silhouette of the clustering of the exemplars in feature space.
+
+    Params:
+        icarl: the model as implemented by 'SubKluster - The candle' team
+
+    Returns:
+        a silhouette score.
+        The closer it is to 1, the better the exemplar sets are separated in the feature space.
+    """
+    with torch.no_grad():
+        icarl.net.eval()
+        fts_exemplar = []
+        labels = []
+		
+        for i, exemplar_set in enumerate(icarl.exemplar_sets):
+            dim_exemplar_set = exemplar_set.size()[0]
+            for exemplar in  exemplar_set:
+                ft_map = icarl.net.feature_extractor(exemplar.to("cuda").unsqueeze(0)).squeeze().cpu()
+                # Append mapped exemplar and label
+                fts_exemplar.append(ft_map)
+                labels.append(i)
+
+        # Stack all mapped exemplars in a tensor, then turn it to numpy
+        fts_exemplar = torch.stack(fts_exemplar)
+        fts_exemplar = fts_exemplar.detach().cpu().numpy()
+        # Turn labels into numpy
+        y = np.array(labels)
+
+        # Compute a sexy silhouette
+        sil = silhouette_score(fts_exemplar, y)
+        return sil
+
 def scatter_images(x, colors, human_readable_label):
 
     sns.set_style('darkgrid')
