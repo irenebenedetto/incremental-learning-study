@@ -4,7 +4,7 @@ from torchvision import transforms
 import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib import cm 
-
+import torch
 from sklearn.manifold import TSNE
 import time
 import pandas as pd
