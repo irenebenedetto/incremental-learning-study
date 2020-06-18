@@ -222,7 +222,8 @@ def create_tsne(icarl, human_readable_label):
         #Now I Have all_images and all_labels, I can start the reduce phase
         fashion_tsne = TSNE().fit_transform(all_images.cpu().detach().numpy())
         #Plot
-        scatter_images(fashion_tsne, all_labels, human_readable_label)
+        f, ax, sc, txts = scatter_images(fashion_tsne, all_labels, human_readable_label)
+        return f, ax, sc, txts
 
 def dump_model(model, filename):
     """
