@@ -14,6 +14,22 @@ import matplotlib.patheffects as PathEffects
 import pickle
 import seaborn as sns
 
+def compute_mean_std(X):
+  """
+  The function computes the mean and the standard deviation on the dimension 0 (row)
+
+  Params:
+    - X matrix of data 
+  Returns:
+    means and standard deviation of X
+  """
+
+  X = np.array(X)
+  mean = X.mean(axis=0)
+  std = X.std(axis=0)
+  return mean, std
+
+
 # DISPLAY
 def show_image_label(img, label):
   """
@@ -82,7 +98,7 @@ def plot_metrics(x, y, stds, name, xlabel, ylabel, title):
   color = cm.coolwarm(np.linspace(0,1,len(y)))
   plt.figure(figsize=(15, 10))
   for yi, std, namei, c in zip(y,stds,  name, color):
-    plt.errorbar(x=x, y=yi,yerr=std, marker='o', color=c, markersize=10, linewidth=4, label = namei)
+    plt.errorbar(x=x, y=yi,yerr=std, color=c, markersize=10, linewidth=4, label = namei)
 
   plt.legend()
   plt.title(title, loc='center', fontsize=16, fontweight=0, color='black')
