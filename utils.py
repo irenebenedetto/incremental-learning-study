@@ -180,6 +180,7 @@ def scatter_images(x, colors, human_readable_label):
             PathEffects.Normal()])
         txts.append(txt)
     plt.savefig(f"tnse_{colors.shape}.png") #Store the pic locally
+    plt.show()
     return f, ax, sc, txts
 
 
