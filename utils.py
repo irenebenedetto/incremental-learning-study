@@ -149,7 +149,7 @@ def scatter_images(x, colors, human_readable_label):
     sns.set_context("notebook", font_scale=1.5,
                     rc={"lines.linewidth": 2.5})
     RS = 123
-
+    name = np.unique(colors)
     # choose a color palette with seaborn.
     num_classes = len(np.unique(colors))
     palette = np.array(sns.color_palette("hls", num_classes))
@@ -179,7 +179,7 @@ def scatter_images(x, colors, human_readable_label):
             PathEffects.Stroke(linewidth=5, foreground="w"),
             PathEffects.Normal()])
         txts.append(txt)
-    plt.savefig(f"tnse_{colors.shape}.png") #Store the pic locally
+    plt.savefig(f"tnse_{name}.png") #Store the pic locally
     plt.show()
     return f, ax, sc, txts
 
