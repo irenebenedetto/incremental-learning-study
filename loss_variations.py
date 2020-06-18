@@ -115,7 +115,7 @@ def l1_loss(self, images, labels, old_net, dist_loss_weight=40):
     return loss
 
 
-def less_forget_loss(self, images, labels, old_net, lambda_base=2.5, m=0.5, K=2):
+def less_forget_loss(self, images, labels, old_net, lambda_base=5, m=0.5, K=2):
     inputs = self.net.forward_cosine(images)
     num_tot_classes = self.num_tot_classes
     num_old_classes = len(self.exemplar_sets)
