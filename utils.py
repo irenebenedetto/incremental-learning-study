@@ -95,7 +95,8 @@ def plot_metrics(x, y, stds, name, xlabel, ylabel, title):
       - label: name of the y axis
   """
 
-  color = cm.coolwarm(np.linspace(0,1,len(y)))
+  color = [ 'salmon', 'lightskyblue', 'yellowgreen', 'tab:purple','tab:blue','darkorange','sandybrown', 'tab:cyan','coral', 'tab:olive']
+  
   plt.figure(figsize=(15, 10))
   for yi, std, namei, c in zip(y,stds,  name, color):
     plt.errorbar(x=x, y=yi,yerr=std, color=c, markersize=10, linewidth=4, label = namei)
