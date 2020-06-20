@@ -101,11 +101,11 @@ def plot_metrics(x, y, stds, name, xlabel, ylabel, title):
   for yi, std, namei, c in zip(y,stds,  name, color):
     plt.errorbar(x=x, y=yi,yerr=std, color=c, markersize=10, linewidth=4, label = namei)
 
-  plt.legend()
-  plt.title(title, loc='center', fontsize=16, fontweight=0, color='black')
+  plt.legend(prop={'size': 22})
+  plt.title(title, loc='center', fontsize=26, fontweight=0, color='black')
   plt.xlabel("Number of classes")
-  plt.ylabel(ylabel)
-  plt.xlabel(xlabel)
+  plt.ylabel(ylabel, fontsize=22)
+  plt.xlabel(xlabel, fontsize=22)
   plt.grid()
   plt.show()
 
@@ -116,10 +116,10 @@ def plot_weights(weights, step):
 
     plt.figure(figsize=(15, 7))
     plt.vlines(x,ymin = 0, ymax = norm_weights, color=my_color, alpha=0.9)
-    plt.title('Norm of weights in fully connected layer')
+    plt.title('Norm of weights in fully connected layer', fontsize=26)
     plt.xticks([x_i for x_i in range(0,(step+1)*10+1 , 10)])
-    plt.xlabel('number of classes')
-    plt.ylabel('Weights norm ')
+    plt.xlabel('number of classes', fontsize=22)
+    plt.ylabel('Weights norm ', fontsize=22)
     plt.savefig(f'weights_step{step}')
     plt.show()
 
