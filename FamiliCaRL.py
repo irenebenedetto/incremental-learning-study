@@ -441,7 +441,7 @@ class FamiliCaRL():
         clf_loss_contribution = self.clf_loss(out_child, labels_onehot).sum(dim=1)
 
 
-        loss = (dist_loss_contribution + clf_loss_contribution).mean()
+        loss = dist_loss_contribution.mean()# + clf_loss_contribution).mean()
 
         mean_loss_epoch_clf += clf_loss_contribution.data.mean().item()
         mean_loss_epoch_dist += dist_loss_contribution.data.mean().item()
