@@ -55,7 +55,7 @@ def l2_loss(self, images, labels, old_net, dist_loss_weight=40):
          num_old_classes: number of old classes 
          old_net: old network used to compute 
     Returns:
-        TUA MAMMA               /the value of the total loss (distillation + classification)
+        the value of the total loss (distillation + classification)
     """
     outputs = self.net(images)[:, :self.num_tot_classes]
     num_old_classes = len(self.exemplar_sets)

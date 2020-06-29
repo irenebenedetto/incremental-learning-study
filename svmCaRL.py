@@ -127,7 +127,7 @@ class SVMiCaRL():
         Update something
 
         Returns:
-        La bici di Bibbona
+        La b. di B.
         """
 
         # Concatenate current exemplar sets with respective labels

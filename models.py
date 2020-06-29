@@ -162,7 +162,7 @@ class FrankenCaRL():
     Update something
 
     Returns:
-      La bici di Bibbona
+      La b. di b.
       The merged dataset D
     """
 
