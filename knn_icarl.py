@@ -129,7 +129,7 @@ class KNNiCaRL():
         """
         Update something
         Returns:
-        La bici di Bibbona
+        La b. di B.
         """
         old_net = deepcopy(self.net)
         # Concatenate current exemplar sets with respective labels
@@ -325,7 +325,7 @@ class KNNiCaRL():
         Py = torch.stack(Py)
         self.exemplar_sets.append(Py) # for dictionary version: self.exemplar_sets[y] = Py
 
-    
+
 
     def test_nmc(self, test_dataset, num_old_classes):
         self.net.eval()

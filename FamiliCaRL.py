@@ -23,7 +23,12 @@ import os
 
 class FamiliCaRL():
   """
-  Support gay marriage. More equity, less discrimination.
+  Implements FamilyCaRL class as described in report.
+  Runs a rather bizarre family of deep neural networks, which distill into one another to create a child model. And so the cycle of life goes on.
+  Sort of.
+
+  Most of the implementation is similar to main class FrankenCaRL. By default, parent model is cloned from main model.
+  A 'custom model' option is present in the constructor, but internally unactive at the moment (at probably forever).
   """
   def __init__(self, K=2000, clf_loss=None, dist_loss=None, clf_params=None, dist_params=None, all_data_means=False, remove_duplicates=True, custom_model=None):
     self.exemplar_sets = []
