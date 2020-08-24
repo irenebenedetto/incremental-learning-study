@@ -1,2 +1,7 @@
 # MLDL-incremental-learning-project
-Repo for Incremental Learning project in MLDL course
+Repo for Incremental Learning project in MLDL course.
+Incremental learning is a learning paradigm in which a deep architecture is required to continually learn from a stream of data.
+In our work, we implemtented some state-of-the-art algorithm in Incremental learning setting such as Finetuning and Learning Without Forgetting and we amend several modifications to the origial iCaRL algorithm: specifically, we experiment with different combinations of distillation and classification losses and introduce new classifiers into the framework.
+Furthermore, we propose three extensions of the origial iCaRL algorithm that attempt to tackle such issues, and we verify their effectiveness. For a fair comparison, we perform our tests on CIFAR-100, as used in the original iCaRL paper.
+
+A complete description of the project is available in the file Incremental_Learning_report.pdf
