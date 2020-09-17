@@ -1,7 +1,7 @@
 # Incremental learning in image classification: an ablation study
 Incremental learning is a learning paradigm in which a deep architecture is required to continually learn from a stream of data.
 
-In our work, we implemtented several state-of-the-art algorithms for incremental learning, such as Finetuning, [Learning Without Forgetting](https://arxiv.org/abs/1606.09282) and [iCaRL](https://arxiv.org/abs/1611.07725). Next, we amend several modifications to the origial iCaRL algorithm: specifically, we experiment with different combinations of distillation and classification losses and introduce new classifiers into the framework.\
+In our work, we implemented several state-of-the-art algorithms for incremental learning, such as Finetuning, [Learning Without Forgetting](https://arxiv.org/abs/1606.09282) and [iCaRL](https://arxiv.org/abs/1611.07725). Next, we amend several modifications to the origial iCaRL algorithm: specifically, we experiment with different combinations of distillation and classification losses and introduce new classifiers into the framework.\
 Furthermore, we propose three extensions of the origial iCaRL algorithm and we verify their effectiveness. We perform our tests on CIFAR-100, as used in the original iCaRL paper.
 
 A [fully detailed report](https://github.com/irenebenedetto/MLDL-incremental-learning-project/blob/master/Incremental_Learning_report.pdf) of the project is available.
